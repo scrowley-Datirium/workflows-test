@@ -1,0 +1,50 @@
+{
+    "roles": {
+        "labOwner": {
+            "permissions": ["add_lab_admin", "add_lab_financer"],
+            "inherittedRoles": ["labAdmin", "labFinancer", "labMember"]
+        },
+        "labAdmin": {
+            "permissions": ["add_lab_member", "add_lab_sample", "edit_lab_sample", "remove_lab_sample"],
+            "inherittedRoles": []
+        },
+        "labFinancer": {
+            "permissions": ["view_subscription", "edit_subscription"],
+            "inherittedRoles": ["labMember"]
+        },
+        "labMember": {
+            "permissions": ["view_lab_sample", "add_lab_project"],
+            "inherittedRoles": []
+        },
+        "projectOwner": {
+            "permissions": ["add_project_member", "remove_project_member"],
+            "inherittedRoles": ["projectMember"]
+        },
+        "projectMember": {
+            "permissions": ["add_project_sample", "remove_project_sample", "edit_project_sample"],
+            "inherittedRoles": []
+        },
+        "developer": {
+            "permissions": ["request_lab_member_and_admin_access"],
+            "inherittedRoles": []
+        }
+    },
+    "permission": {
+        "edit_subscription": "Allows user to edit subscription for some lab",
+        "edit_project_sample": "Allows user to edit samples in some project",
+
+        "add_lab_member": "allows user to invite a scidap user (by email) to be a member in some lab",
+        "add_lab_sample": "Allows user to add samples to any project within some lab",
+        "add_lab_project": "Allows user to create a project in some lab",
+        "add_project_member": "Allows user to add some lab_member as a project_member",
+        "add_project_sample": "Allows user to add samples to some project",
+
+        "view_subscription": "Allows user to view subscription(s) for some lab",
+        "view_lab_sample": "Allows users to view all samples in projects made in some lab",
+
+        "remove_project_member": "",
+        "remove_project_sample": "",
+
+        "request_lab_member_and_admin_access": ""
+    }
+}

@@ -305,7 +305,7 @@ outputs:
         tab: 'IGV Genome Browser'
         id: 'igvbrowser'
         type: 'wig'
-        name: "Genome coverage 1"
+        name: "Cond_1 Genome coverage"
         height: 120
 
   genome_coverage_cond_2:
@@ -319,7 +319,7 @@ outputs:
         tab: 'IGV Genome Browser'
         id: 'igvbrowser'
         type: 'wig'
-        name: "Genome coverage 2"
+        name: "Cond_2 Genome coverage"
         height: 120
 
   narrow_peaks_cond_1:
