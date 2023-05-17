@@ -15,6 +15,7 @@ The `line`, `pie`, `chart`, `igvbrowser`, `syncfusiongrid`, and `linkList` types
 - [IGV browser](#igvbrowser-example)
 - [markdown](#markdown-view-example)
 - [image](#image-example)
+- [tableView](#table-view)
 - [external/internal link](#link-list-example)
 - [MA plot](#ma-plot-example)
 
@@ -271,6 +272,32 @@ outputs:
             tab: 'Plots'
             Caption: 'Methylation bias plot'
 ```
+
+---
+
+## Table View
+
+The tableView plugin allows a SINLGE tsv (and yaml) file to be used for creating a QC-table in sample-comparison.
+
+```yaml
+outputs: 
+    ...
+    get_stat_formatted_log:
+        type: File?
+        label: "Bowtie & Samtools Rmdup combined formatted log"
+        format: "http://edamontology.org/format_3475"
+        doc: "Processed and combined Bowtie aligner and Samtools rmdup formatted log"
+        outputSource: get_stat/collected_statistics_tsv
+        'sd:visualPlugins':
+        - tableView:
+            vertical: true
+            tab: 'Overview'
+```
+
+There are 2 important things to note.
+
+1. the **tableView** plugin also requires a yaml file (both generated from any **get_statistic_...** tools)
+2. the yaml file should be saved as an output. It's name is irrelevant, but the output name from the get_statistic tool used should end in "yaml" 
 
 ---
 
