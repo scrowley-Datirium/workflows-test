@@ -72,7 +72,7 @@ There are 4 additional references/tags that can be included in different parts o
 2. [Upstreams](#upstreams): For designating what workflows generate outputs that some workflow can use as inputs.
 3. [Visual Plugins](#visualplugins-for-an-output-type-file): For added visualizations of output data within the SciDAP platform
 4. [Service Tags](#service-tags-for-workflows): For differentiating what kind of samples this workflow creates
-
+5. [sql query for input](#sql-for-input): How to allow user to dynamically create sql query based off of options (saved as string for cwl input)
 ---
 ### Metadata
 
@@ -116,3 +116,20 @@ The service tag on a workflow will determine how samples are listed when viewing
 
 Workflows without a service tag (or with one not recognized) will create samples in a tab called "not in use"
 
+### SQL for Input
+
+```yml
+inputs: 
+#...
+  sql_query:
+    type: string
+    label: "Filtering parameters"
+    doc: "Filtering parameters (WHERE parameters for SQL query)"
+    'sd:filtering':
+      params:
+        columns: ["Refseq_id", "Gene_id", "txStart", "txEnd", "Strand", "Region", "Chr", "Start", "End", "Conc", "Conc1", "Conc2", "Fold", "p-value", "FDR", "Called1", "Called2"]
+        types:   ["string", "string", "number", "number", "string", "string", "string", "number", "number", "number", "number", "number", "number", "number", "number","number", "number"]
+       
+```
+
+will create an sql query based on the values given for any grouping and selection of the columns
