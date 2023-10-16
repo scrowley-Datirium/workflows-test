@@ -4,7 +4,9 @@ class: Workflow
 
 requirements:
   - class: StepInputExpressionRequirement
-  - class: SubworkflowFeatureRequirement
+
+'sd:upstream':
+  kallisto_index: "kallisto-index.cwl"
 
 
 inputs:
@@ -12,26 +14,31 @@ inputs:
   alias:
     type: string
     label: "Sample short name/Alias:"
+    'sd:localLabel': true
     doc: |
-      Used for samplename in downstream analyses. Ensure this is the same name used in the metadata samplesheet.
+      Short name for the analysis.
     sd:preview:
       position: 1
 
-  environment:
-    type: string?
-    label: "Environment:"
+  kallisto_index:
+    type: File
+    format: "http://edamontology.org/format_1929"
+    label: "Kallisto index sample to use for pseudo-alignment:"
+    'sd:upstreamSource': "kallisto_index/index_file"
+    'sd:localLabel': true
     doc: |
-      Where the sample was collected. Optional input.
+      Kallisto index sample to use for pseudo-alignment, generated from the "Kallisto index pipeline".
     sd:preview:
       position: 2
 
-  catalog:
-    type: string?
-    label: "Catalog No.:"
+  input_annotation_file:
+    type: File
+    format: "http://edamontology.org/format_3475"
+    label: "Annotation file (gff, gtf, tsv):"
+    'sd:upstreamSource': "kallisto_index/input_annotation_file"
     doc: |
-      If available. Optional input.
-    sd:preview:
-      position: 3
+      TSV file containing gene annotations for the reference genome. From kallisto index upstream.
+      Required columns (include headers as row 1 of TSV): RefseqId, GeneId, Chrom (transcript id/name), TxStart (start of alignment in query), TxEnd (end of alignment in query), Strand (if query start < query end strand +, else -).
 
   fastq_file_R1:
     type:
@@ -44,7 +51,7 @@ inputs:
     doc: |
       Read 1 FASTQ file from a paired-end sequencing run.
     sd:preview:
-      position: 11
+      position: 5
 
   fastq_file_R2:
     type:
@@ -57,47 +64,17 @@ inputs:
     doc: |
       Read 2 FASTQ file that pairs with the input R1 file.
     sd:preview:
-      position: 12
-
-  trimLeftF:
-    type: int?
-    default: 0
-    label: "Trim 5' of R1:"
-    'sd:localLabel': true
-    doc: |
-      Recommended if adapters are still on the input sequences. Trims the first J bases from the 5' end of each forward read.
-
-  trimLeftR:
-    type: int?
-    default: 0
-    label: "Trim 5' of R2:"
-    'sd:localLabel': true
-    doc: |
-      Recommended if adapters are still on the input sequences. Trims the first K bases from the 5' end of each reverse read.
-
-  truncLenF:
-    type: int
-    default: 0
-    label: "Truncate 3' of R1:"
-    'sd:localLabel': true
-    doc: |
-      Clips the forward read starting M bases from the 5' end (before trimming). If base quality is OK for entire read, value should be set to the expected number of Illumina cycles for R1.
-
-  truncLenR:
-    type: int
-    default: 0
-    label: "Truncate 3' of R2:"
-    'sd:localLabel': true
-    doc: |
-      Clips the reverse read starting N bases from the 5' end (before trimming).  If base quality is OK for entire read, value should be set to the expected number of Illumina cycles for R2.
+      position: 6
 
   threads:
     type: int?
-    default: 4
+    default: 10
     label: "Threads:"
     'sd:localLabel': true
     doc: |
       Number of threads to use for steps that support multithreading.
+    sd:preview:
+      position: 20
 
 
 outputs:
@@ -146,45 +123,37 @@ outputs:
         colors: ["#b3de69", "#888888", "#fb8072", "#fdc381", "#99c0db"]
         data: [$11, $7, $8, $9, $12]
 
+  rpkm_genes:
+    type: File
+    format: "http://edamontology.org/format_3475"
+    label: "kallisto estimated counts per transcript (same as rpkm_isoforms and rpkm_common_tss)"
+    doc: "NOT ACTUALLY RPKM, output name required for DESeq compatibility, these are kallisto esimate counts per transcript"
+    outputSource: kallisto_quant/transcript_counts
+    'sd:visualPlugins':
+    - syncfusiongrid:
+        tab: 'Transcript Counts'
+
   overview:
     type: File
     format: "http://edamontology.org/format_3835"
     label: "summary of inputs"
     doc: "summary of inputs"
-    outputSource: qiime_pipeline/overview
+    outputSource: kallisto_quant/overview
     'sd:visualPlugins':
     - markdownView:
         tab: 'Overview'
 
-  fastq_summary:
+  pie_chart_data:
     type: File?
-    label: "Summary of input FASTQ reads"
-    doc: "summary of input read data"
-    outputSource: qiime_pipeline/fastq_summary
-    'sd:visualPlugins':
-    - qiime2:
-        tab: 'Overview'
-        target: "_blank"
-
-  alpha_rarefaction:
-    type: File?
-    label: "Alpha rarefaction curve"
-    doc: "plot of OTU rarefaction"
-    outputSource: qiime_pipeline/alpha_rarefaction
-    'sd:visualPlugins':
-    - qiime2:
-        tab: 'Overview'
-        target: "_blank"
-
-  taxa_bar_plots:
-    type: File?
-    label: "Taxonomic classifications bar plot"
-    doc: "bar plot for exploring the taxonomic composition of the sample"
-    outputSource: qiime_pipeline/taxa_bar_plots
-    'sd:visualPlugins':
-    - qiime2:
-        tab: 'Overview'
-        target: "_blank"
+    label: "aligned transcript metrics"
+    format: "http://edamontology.org/format_2330"
+    doc: "tsv file containing transcript read statistics for sample level pie chart alignment summary"
+    outputSource: kallisto_quant/pie_stats
+    'sd:preview':
+      'sd:visualPlugins':
+      - pie:
+          colors: ['#b3de69', '#99c0db', '#fdc381', '#fb8072']
+          data: [$2, $3, $4, $5]
 
 
 steps:
@@ -199,7 +168,7 @@ steps:
     in:
       compressed_file: fastq_file_R1
       output_prefix:
-        default: "merged_R1"
+        default: "extracted_R1"
     out: [fastq_file]
 
   extract_fastq_R2:
@@ -212,7 +181,7 @@ steps:
     in:
       compressed_file: fastq_file_R2
       output_prefix:
-        default: "merged_R2"
+        default: "extracted_R2"
     out: [fastq_file]
 
   trim_fastq:
@@ -221,8 +190,8 @@ steps:
       For libraries sequenced on the Illumina platform it’s recommended to remove adapter sequences
       from the reads. If adapters are not trimmed there is a high risk of reads being unmapped to a
       reference genome. This becomes particularly important when the reads are long and the fragments
-      are short - resulting in sequencing adapters at the end of a read. If adapter trimming will cause
-      all the reads to become too short (<30bp), this step will be skipped.
+      are short - resulting in sequencing adapters at the end of read. If adapter trimming will cause
+      all the reads become too short (<30bp), this step will be skipped.
     run: ../tools/trimgalore.cwl
     in:
       input_file: extract_fastq_R1/fastq_file
@@ -265,7 +234,8 @@ steps:
       target_filename:
         source: extract_fastq_R1/fastq_file
         valueFrom: $(self.basename)
-    out: [target_file]
+    out:
+      - target_file
 
   rename_R2:
     run: ../tools/rename.cwl
@@ -274,7 +244,8 @@ steps:
       target_filename:
         source: extract_fastq_R2/fastq_file
         valueFrom: $(self.basename)
-    out: [target_file]
+    out:
+      - target_file
 
   fastx_quality_stats_R1:
     label: "Quality control of unmapped sequence data for read 1"
@@ -298,27 +269,15 @@ steps:
       input_file: rename_R2/target_file
     out: [statistics_file]
 
-  qiime_pipeline:
-    label: "Run pipeline for processing a single 16S metagenomic sample using qiime2"
-    doc: |
-      Calls shell wrapper for QIIME2's 16S metagenomic processing pipeline.
-    run: ../tools/qiime2-sample-pe.cwl
+  kallisto_quant:
+    run: ../tools/kallisto-quant-pe.cwl
     in:
-      samplename: alias
-      read1file: rename_R1/target_file
-      read2file: rename_R2/target_file
-      trimLeftF: trimLeftF
-      trimLeftR: trimLeftR
-      truncLenF: truncLenF
-      truncLenR: truncLenR
+      kallisto_index: kallisto_index
+      annotation_tsv: input_annotation_file
+      fastq_R1: fastq_file_R1
+      fastq_R2: fastq_file_R2
       threads: threads
-    out:
-      - overview
-      - fastq_summary
-      - alpha_rarefaction
-      - taxa_bar_plots
-      - log_file_stdout
-      - log_file_stderr
+    out: [overview, pie_stats, kallisto_abundance_file, kallisto_runinfo_file, transcript_counts, log_file_stdout, log_file_stderr]
 
 
 $namespaces:
@@ -327,11 +286,11 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-s:name: "16S metagenomic paired-end QIIME2 Sample (preprocessing)"
-label: "16S metagenomic paired-end QIIME2 Sample (preprocessing)"
-s:alternateName: "16S metagenomic paired-end pipeline using QIIME2 for single sample analysis"
+s:name: "Kallisto transcript quant pipeline"
+label: "Kallisto transcript quant pipeline"
+s:alternateName: "Kallisto transcript quant pipeline"
 
-s:downloadUrl: https://github.com/datirium/workflows/tree/master/workflows/workflows/qiime2-sample-pe.cwl
+s:downloadUrl: https://github.com/datirium/workflows/tree/master/workflows/workflows/kallisto-quant.cwl
 s:codeRepository: https://github.com/datirium/workflows
 s:license: http://www.apache.org/licenses/LICENSE-2.0
 
@@ -367,35 +326,20 @@ s:creator:
 
 
 doc: |
-  A workflow for processing a single 16S sample via a QIIME2 pipeline.
+  This workflow runs RNA-Seq reads using the kallisto quant tool against a kallisto index reference genome (see "Kallisto index pipeline").
+  The kallisto transcript-level quantified samples are then compatible with the DESeq and GSEA downstream workflows.
 
-  ## __Outputs__
-  #### Output files:
-    - overview.md, list of inputs
-    - demux.qzv, summary visualizations of imported data
-    - alpha-rarefaction.qzv, plot of OTU rarefaction
-    - taxa-bar-plots.qzv, relative frequency of taxomonies barplot
-
-  ## __Inputs__
-  #### General Info
-   - Sample short name/Alias: Used for samplename in downstream analyses. Ensure this is the same name used in the metadata samplesheet.
-   - Environment: where the sample was collected
-   - Catalog No.: catalog number if available (optional)
-   - Read 1 FASTQ file: Read 1 FASTQ file from a paired-end sequencing run.
-   - Read 2 FASTQ file: Read 2 FASTQ file that pairs with the input R1 file.
-   - Trim 5' of R1: Recommended if adapters are still on the input sequences. Trims the first J bases from the 5' end of each forward read.
-   - Trim 5' of R2: Recommended if adapters are still on the input sequences. Trims the first K bases from the 5' end of each reverse read.
-   - Truncate 3' of R1: Recommended if quality drops off along the length of the read. Clips the forward read starting M bases from the 5' end (before trimming).
-   - Truncate 3' of R2: Recommended if quality drops off along the length of the read. Clips the reverse read starting N bases from the 5' end (before trimming).
-   - Threads: Number of threads to use for steps that support multithreading.
+  ### __Inputs__
+   - FASTQ files of the reference genome that will be indexed
+   - number of threads to use for multithreading processes
+  
+  ### __Outputs__
+   - kallisto index file (.kdx).
+   - stdout log file (output in Overview tab as well)
+   - stderr log file
 
   ### __Data Analysis Steps__
-  1. Generate FASTX quality statistics for visualization of unmapped, raw FASTQ reads.
-  2. Import the data, make a qiime artifact (demux.qza), and summary visualization
-  3. Denoising will detect and correct (where possible) Illumina amplicon sequence data. This process will additionally filter any phiX reads (commonly present in marker gene Illumina sequence data) that are identified in the sequencing data, and will filter chimeric sequences.
-  4. Generate a phylogenetic tree for diversity analyses and rarefaction processing and plotting.
-  5. Taxonomy classification of amplicons. Performed using a Naive Bayes classifier trained on the Greengenes2 database "gg_2022_10_backbone_full_length.nb.qza".
+  1. cwl calls dockercontainer robertplayer/scidap-kallisto to index reference FASTA with `kallisto index`, generating a kallisto index file.
 
   ### __References__
-  1. Bolyen E, Rideout JR, Dillon MR, Bokulich NA, Abnet CC, Al-Ghalith GA, Alexander H, Alm EJ, Arumugam M, Asnicar F, Bai Y, Bisanz JE, Bittinger K, Brejnrod A, Brislawn CJ, Brown CT, Callahan BJ, Caraballo-Rodríguez AM, Chase J, Cope EK, Da Silva R, Diener C, Dorrestein PC, Douglas GM, Durall DM, Duvallet C, Edwardson CF, Ernst M, Estaki M, Fouquier J, Gauglitz JM, Gibbons SM, Gibson DL, Gonzalez A, Gorlick K, Guo J, Hillmann B, Holmes S, Holste H, Huttenhower C, Huttley GA, Janssen S, Jarmusch AK, Jiang L, Kaehler BD, Kang KB, Keefe CR, Keim P, Kelley ST, Knights D, Koester I, Kosciolek T, Kreps J, Langille MGI, Lee J, Ley R, Liu YX, Loftfield E, Lozupone C, Maher M, Marotz C, Martin BD, McDonald D, McIver LJ, Melnik AV, Metcalf JL, Morgan SC, Morton JT, Naimey AT, Navas-Molina JA, Nothias LF, Orchanian SB, Pearson T, Peoples SL, Petras D, Preuss ML, Pruesse E, Rasmussen LB, Rivers A, Robeson MS, Rosenthal P, Segata N, Shaffer M, Shiffer A, Sinha R, Song SJ, Spear JR, Swafford AD, Thompson LR, Torres PJ, Trinh P, Tripathi A, Turnbaugh PJ, Ul-Hasan S, van der Hooft JJJ, Vargas F, Vázquez-Baeza Y, Vogtmann E, von Hippel M, Walters W, Wan Y, Wang M, Warren J, Weber KC, Williamson CHD, Willis AD, Xu ZZ, Zaneveld JR, Zhang Y, Zhu Q, Knight R, and Caporaso JG. 2019. Reproducible, interactive, scalable and extensible microbiome data science using QIIME 2. Nature Biotechnology 37: 852–857. https://doi.org/10.1038/s41587-019-0209-9
-    
+    -   Bray, N. L., Pimentel, H., Melsted, P. & Pachter, L. Near-optimal probabilistic RNA-seq quantification, Nature Biotechnology 34, 525-527(2016), doi:10.1038/nbt.3519
