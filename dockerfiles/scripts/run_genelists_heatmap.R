@@ -102,7 +102,32 @@ morpheus_html <- morpheus(
 )
 html_location <- paste(output_location, "/heatmap.html", sep = "")
 print(paste("Saving heatmap to", html_location))
-htmlwidgets::saveWidget(
-    morpheus_html,
-    file=html_location
+tryCatch(
+    expr = {
+        htmlwidgets::saveWidget(
+            morpheus(
+                x=gct_data$data,
+                rowAnnotations=if(nrow(gct_data$rowAnnotations) == 0) NULL else gct_data$rowAnnotations,
+                columnAnnotations=if(nrow(gct_data$columnAnnotations) == 0) NULL else gct_data$columnAnnotations %>% dplyr::mutate_if(is_all_numeric, as.numeric),
+                colorScheme=list(scalingMode="fixed", stepped=FALSE, values=list(0, 99, 100,199), colors=list("white", "black", "white", "red")),
+                rowSortBy=list(list(field="genelist_name", order=0)),
+                columnSortBy=list(
+                    list(field="data_type", order=0),
+                    list(field="sample_name", order=0),
+                    list(field="tss_window", order=0)),
+                tools=list(list(
+                    name="Sort/Group", 
+                    params=list(group_cols_by="sample_name")
+                )),
+                rowGroupBy=list(list(field="genelist_name")),
+                columnGroupBy=list(list(field="sample_name")),
+                rowSize=3,
+                columnSize=3
+            ),
+            file=html_location
+        )
+    },
+    error = function(e){
+        print(paste0("Failed to export morpheus heatmap to ", html_location, " with error - ", e))
+    }
 )
