@@ -22,3 +22,10 @@ When used with the ```queryRedirect``` plugin, there are 4 required query params
   - smallest plotable value is 1e-308
 
 
+The download link for the ```data_file``` param (and access to other input/output values) can be accessed via the ```this.getSampleValue``` method.  
+
+This method follows JS string formatting syntax with backticks ``` ` ``` and ```${}```.
+
+The first param of that method is ```'inputs'``` or ```'outputs'```.  
+The second param is the fieldName of that input or output.
+If the field is a file, then the method will automatically format that file into a download link.
