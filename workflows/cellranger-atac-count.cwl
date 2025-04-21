@@ -9,7 +9,7 @@ requirements:
   - class: MultipleInputFeatureRequirement
 
 
-'sd:upstream':
+"sd:upstream":
   genome_indices:
   - "cellranger-mkref.cwl"
 
@@ -18,16 +18,41 @@ inputs:
 
   alias:
     type: string
-    label: "Experiment short name/Alias"
+    label: "Experiment short name/alias"
     sd:preview:
       position: 1
 
   indices_folder:
     type: Directory
-    label: "Genome Type"
-    doc: "Cell Ranger ARC generated genome indices folder"
-    'sd:upstreamSource': "genome_indices/arc_indices_folder"
-    'sd:localLabel': true
+    label: "Cell Ranger Reference Sample"
+    doc: |
+      Any "Cell Ranger Reference Sample" that
+      builds a reference genome package of a
+      selected species for quantifying gene
+      expression and chromatin accessibility.
+      This sample can be obtained from "Cell
+      Ranger Reference (RNA, ATAC, RNA+ATAC)"
+      pipeline.
+    "sd:upstreamSource": "genome_indices/arc_indices_folder"
+    "sd:localLabel": true
+
+  annotation_gtf_file:
+    type: File
+    "sd:upstreamSource": "genome_indices/genome_indices/annotation_gtf"
+
+  memory_limit:
+    type: int?
+    default: 20
+    "sd:upstreamSource": "genome_indices/memory_limit"
+
+  multiome_arc:
+    type: boolean?
+    default: false
+    label: "scATAC-Seq files come from scMultiome experiment"
+    doc: |
+      Changes chemistry type parameter to indicate
+      that scATAC-Seq data is part of the scMultiome
+      experiment.
 
   fastq_file_r1:
     type:
@@ -56,68 +81,37 @@ inputs:
   force_cells:
     type: int?
     default: null
-    label: "Define the top N barcodes with the most fragments overlapping peaks as cells"
+    label: "Define the top N barcodes with the most ATAC fragments overlapping peaks as cells"
     doc: |
-      Define the top N barcodes with the most fragments overlapping
+      Define the top N barcodes with the most ATAC fragments overlapping
       peaks as cells. N must be a positive integer <= 20,000. Please
       consult the documentation before using this option
-    'sd:layout':
+    "sd:layout":
       advanced: true
 
   threads:
-    type: int?
-    default: 4
-    label: "Number of threads"
-    doc: "Number of threads for those steps that support multithreading"
-    'sd:layout':
-      advanced: true
-
-  memory_limit:
-    type: int?
-    default: 20
-    label: "Genome Type"
+    type:
+    - "null"
+    - type: enum
+      symbols:
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+      - "6"
+    default: "4"
+    label: "Cores/CPUs"
     doc: |
-      Maximum memory used (GB).
-      The same as was used for generating indices.
-      The same will be applied to virtual memory
-    'sd:upstreamSource': "genome_indices/memory_limit"
-    'sd:localLabel': true
+      Parallelization parameter to define the
+      number of cores/CPUs that can be utilized
+      simultaneously.
+      Default: 4
+    "sd:layout":
+      advanced: true
 
 
 outputs:
-
-  fastqc_report_fastq_r1:
-    type: File
-    outputSource: run_fastqc_for_fastq_r1/html_file
-    label: "FastqQC report for FASTQ file R1"
-    doc: |
-      FastqQC report for FASTQ file R1
-    'sd:visualPlugins':
-    - linkList:
-        tab: 'Overview'
-        target: "_blank"
-
-  fastqc_report_fastq_r2:
-    type: File
-    outputSource: run_fastqc_for_fastq_r2/html_file
-    label: "FastqQC report for FASTQ file R2"
-    doc: |
-      FastqQC report for FASTQ file R2
-    'sd:visualPlugins':
-    - linkList:
-        tab: 'Overview'
-        target: "_blank"
-
-  fastqc_report_fastq_r3:
-    type: File
-    outputSource: run_fastqc_for_fastq_r3/html_file
-    label: "FastqQC report for FASTQ file R3"
-    doc: |
-      FastqQC report for FASTQ file R3
-    'sd:visualPlugins':
-    - linkList:
-        tab: 'Overview'
-        target: "_blank"
 
   web_summary_report:
     type: File
@@ -125,9 +119,9 @@ outputs:
     label: "Cell Ranger summary"
     doc: |
       Run summary metrics and charts in HTML format
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - linkList:
-        tab: 'Overview'
+        tab: "Overview"
         target: "_blank"
 
   metrics_summary_report_json:
@@ -154,10 +148,22 @@ outputs:
   possorted_genome_bam_bai:
     type: File
     outputSource: generate_counts_matrix/possorted_genome_bam_bai
-    label: "Aligned to the genome indexed reads BAM+BAI files"
+    label: "ATAC reads"
     doc: |
-      Indexed position-sorted reads aligned to the genome annotated
-      with barcode information in BAM format
+      Genome track of ATAC reads aligned to
+      the reference genome. Each read has
+      a 10x Chromium cellular (associated
+      with a 10x Genomics gel bead) barcode
+      and mapping information stored in TAG
+      fields.
+    "sd:visualPlugins":
+    - igvbrowser:
+        tab: "IGV Genome Browser"
+        id: "igvbrowser"
+        type: "alignment"
+        format: "bam"
+        name: "ATAC reads"
+        displayMode: "SQUISHED"
 
   atac_fragments_file:
     type: File
@@ -170,10 +176,18 @@ outputs:
   peaks_bed_file:
     type: File
     outputSource: generate_counts_matrix/peaks_bed_file
-    label: "Identified peaks in BED format"
+    label: "ATAC peaks"
     doc: |
-      Locations of open-chromatin regions identified in the
-      experiment (these regions are referred to as "peaks")
+      Genome track of open-chromatin
+      regions identified as peaks.
+    "sd:visualPlugins":
+    - igvbrowser:
+        tab: "IGV Genome Browser"
+        id: "igvbrowser"
+        type: "annotation"
+        name: "ATAC peaks"
+        displayMode: "COLLAPSE"
+        height: 40
 
   peak_annotation_file:
     type: File
@@ -185,15 +199,17 @@ outputs:
   cut_sites_bigwig_file:
     type: File
     outputSource: generate_counts_matrix/cut_sites_bigwig_file
-    label: "Smoothed transposition site track in bigWig format"
+    label: "ATAC transposition counts"
     doc: |
-      Smoothed transposition site track in bigWig format
-    'sd:visualPlugins':
+      Genome track of observed transposition
+      sites in the experiment smoothed at a
+      resolution of 400 bases.
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'IGV Genome Browser'
-        id: 'igvbrowser'
-        type: 'wig'
-        name: "ATAC cut sites"
+        tab: "IGV Genome Browser"
+        id: "igvbrowser"
+        type: "wig"
+        name: "ATAC transposition counts"
         height: 120
 
   # peak_motif_mapping_bed:
@@ -290,26 +306,19 @@ outputs:
     outputSource: collect_statistics/collected_statistics_md
     label: "Collected statistics in Markdown format"
     doc: "Collected statistics in Markdown format"
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - markdownView:
-        tab: 'Overview'
+        tab: "Overview"
 
   collected_statistics_tsv:
     type: File
     outputSource: collect_statistics/collected_statistics_tsv
     label: "Collected statistics in TSV format"
     doc: "Collected statistics in TSV format"
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - tableView:
         vertical: true
-        tab: 'Overview'
-
-  compressed_html_data_folder:
-    type: File
-    outputSource: compress_html_data_folder/compressed_folder
-    label: "Compressed folder with CellBrowser formatted results"
-    doc: |
-      Compressed folder with CellBrowser formatted results
+        tab: "Overview"
 
   html_data_folder:
     type: Directory
@@ -324,9 +333,9 @@ outputs:
     label: "CellBrowser formatted Cellranger report"
     doc: |
       CellBrowser formatted Cellranger report
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - linkList:
-        tab: 'Overview'
+        tab: "Overview"
         target: "_blank"
 
 
@@ -359,30 +368,6 @@ steps:
     out:
     - fastq_file
 
-  run_fastqc_for_fastq_r1:
-    run: ../tools/fastqc.cwl
-    in:
-      reads_file: extract_fastq_r1/fastq_file
-      threads: threads
-    out:
-    - html_file
-
-  run_fastqc_for_fastq_r2:
-    run: ../tools/fastqc.cwl
-    in:
-      reads_file: extract_fastq_r2/fastq_file
-      threads: threads
-    out:
-    - html_file
-
-  run_fastqc_for_fastq_r3:
-    run: ../tools/fastqc.cwl
-    in:
-      reads_file: extract_fastq_r3/fastq_file
-      threads: threads
-    out:
-    - html_file
-
   generate_counts_matrix:
     run: ../tools/cellranger-atac-count.cwl
     in:
@@ -391,7 +376,12 @@ steps:
       fastq_file_r3: extract_fastq_r3/fastq_file
       indices_folder: indices_folder
       force_cells: force_cells
-      threads: threads
+      chemistry:
+        source: multiome_arc
+        valueFrom: $(self?"ARC-v1":"null")
+      threads:
+        source: threads
+        valueFrom: $(parseInt(self))
       memory_limit: memory_limit
       virt_memory_limit: memory_limit
     out:
@@ -458,16 +448,10 @@ steps:
     in:
       secondary_analysis_report_folder: generate_counts_matrix/secondary_analysis_report_folder
       filtered_feature_bc_matrix_folder: generate_counts_matrix/filtered_feature_bc_matrix_folder
+      annotation_gtf_file: annotation_gtf_file
     out:
     - html_data
     - index_html_file
-
-  compress_html_data_folder:
-    run: ../tools/tar-compress.cwl
-    in:
-      folder_to_compress: cellbrowser_build/html_data
-    out:
-    - compressed_folder
 
 
 $namespaces:
@@ -476,9 +460,9 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-label: "Cell Ranger ATAC Count"
-s:name: "Cell Ranger ATAC Count"
-s:alternateName: "Counts reads from a single scATAC-Seq library"
+label: "Cell Ranger Count (ATAC)"
+s:name: "Cell Ranger Count (ATAC)"
+s:alternateName: "Cell Ranger Count (ATAC)"
 
 s:downloadUrl: https://raw.githubusercontent.com/datirium/workflows/master/workflows/cellranger-atac-count.cwl
 s:codeRepository: https://github.com/datirium/workflows
@@ -516,6 +500,10 @@ s:creator:
 
 
 doc: |
-  Cell Ranger ATAC Count
+  Cell Ranger Count (ATAC)
 
-  Counts reads from a single scATAC-Seq library
+  Quantifies single-cell chromatin accessibility of the
+  sequencing data from a single 10x Genomics library.
+  The results of this workflow are used in either the
+  “Single-Cell ATAC-Seq Filtering Analysis” or “Cell
+  Ranger Aggregate (ATAC)” pipeline.

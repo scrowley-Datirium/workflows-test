@@ -28,6 +28,7 @@ requirements:
     - "trim-rnaseq-pe-dutp.cwl"
     - "trim-rnaseq-se-dutp.cwl"
     - "trim-quantseq-mrnaseq-se-strand-specific.cwl"
+    - "kallisto-quant-pe.cwl"
 
 
 inputs:
@@ -106,12 +107,15 @@ inputs:
 
   contrast:
     type: string?
-    label: "Contrast. If not provided, use the last term from the design formula."
+    label: "Contrast. If not provided, use all possible combinations"
     doc: |
       Contrast to be be applied for the output, formatted as
       a mathematical formula of values from the --metadata table.
-      If not provided, the last term from the design formula will
-      be used.
+      If not provided, all possible combinations of values from
+      the metadata columns present in the --design will be used
+      (results will be merged giving the priority to significantly
+      differentially expressed genes with higher absolute
+      log2FoldChange values).
 
   remove:
     type: string?
@@ -247,6 +251,16 @@ inputs:
     'sd:layout':
       advanced: true
 
+  minimum_logfc:
+    type: float?
+    default: 0
+    label: "Minimum log2FoldChange to show features in the exploratory visualization analysis"
+    doc: |
+      In the exploratory visualization analysis output only features with
+      absolute log2FoldChange bigger or equal to this value. Default: 0
+    'sd:layout':
+      advanced: true
+
   threads:
     type:
     - "null"
@@ -377,13 +391,13 @@ outputs:
         tab: 'Overview'
         target: "_blank"
 
-  deseq_stdout_log:
+  deseq_stdout_log_file:
     type: File
     outputSource: deseq_multi_factor/stdout_log
     label: "DESeq stdout log"
     doc: "DESeq stdout log"
 
-  deseq_stderr_log:
+  deseq_stderr_log_file:
     type: File
     outputSource: deseq_multi_factor/stderr_log
     label: "DESeq stderr log"
@@ -448,6 +462,7 @@ steps:
         source: selected_features
         valueFrom: $(split_by_common_delim(self))
       maximum_padj: maximum_padj
+      minimum_logfc: minimum_logfc
       threads:
         source: threads
         valueFrom: $(parseInt(self))

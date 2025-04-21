@@ -9,7 +9,7 @@ requirements:
 - class: MultipleInputFeatureRequirement
 
 
-'sd:upstream':
+"sd:upstream":
   sc_experiment:
   - "single-cell-preprocess-cellranger.cwl"
   - "cellranger-multi.cwl"
@@ -19,7 +19,7 @@ inputs:
 
   alias:
     type: string
-    label: "Experiment short name/Alias"
+    label: "Experiment short name/alias"
     sd:preview:
       position: 1
 
@@ -27,26 +27,24 @@ inputs:
     type:
     - "null"
     -  File[]
-    label: "Single-cell Experiment"
-    doc: "Molecule-level information from individual runs of cellranger count"
-    'sd:upstreamSource': "sc_experiment/molecule_info_h5"
-    'sd:localLabel': true
+    label: "Cell Ranger RNA or RNA+VDJ Sample"
+    doc: |
+      Any "Cell Ranger RNA or RNA+VDJ Sample"
+      that produces gene expression and,
+      optionally, V(D)J contigs data, from a
+      single 10x Genomics library
+    "sd:upstreamSource": "sc_experiment/molecule_info_h5"
+    "sd:localLabel": true
 
   filtered_data_folder:
     type:
     - "null"
     - Directory[]
-    label: "Single-cell Experiment"
-    doc: "Filtered data folders from individual runs of cellranger multi"
-    'sd:upstreamSource': "sc_experiment/filtered_data_folder"
-    'sd:localLabel': true
+    "sd:upstreamSource": "sc_experiment/filtered_data_folder"
 
   gem_well_labels:
     type: string[]
-    label: "Single-cell Experiment"
-    doc: "Array of GEM well identifiers to be used for labeling purposes only"
-    'sd:upstreamSource': "sc_experiment/alias"
-    'sd:localLabel': true
+    "sd:upstreamSource": "sc_experiment/alias"
 
   normalization_mode:
     type:
@@ -55,10 +53,10 @@ inputs:
       symbols:
       - "none"
       - "mapped"
-    default: "mapped"
+    default: "none"
     label: "Library depth normalization mode"
     doc: "Library depth normalization mode"
-    'sd:layout':
+    "sd:layout":
       advanced: true
 
   clonotype_grouping:
@@ -76,7 +74,7 @@ inputs:
       When cellranger aggr is called with cellranger multi outputs, there are three
       ways it can process the datasets depending on the combination of donor and
       origin values
-    'sd:layout':
+    "sd:layout":
       advanced: true
 
   threads:
@@ -84,7 +82,7 @@ inputs:
     default: 4
     label: "Number of threads"
     doc: "Number of threads for those steps that support multithreading"
-    'sd:layout':
+    "sd:layout":
       advanced: true
 
   memory_limit:
@@ -92,7 +90,7 @@ inputs:
     default: 30
     label: "Maximum memory used (GB)"
     doc: "Maximum memory used (GB). The same will be applied to virtual memory"
-    'sd:layout':
+    "sd:layout":
       advanced: true
 
 
@@ -103,9 +101,9 @@ outputs:
     outputSource: aggregate_counts/web_summary_report
     label: "Aggregated run summary metrics and charts in HTML format"
     doc: "Aggregated run summary metrics and charts in HTML format"
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - linkList:
-        tab: 'Overview'
+        tab: "Overview"
         target: "_blank"
 
   metrics_summary_report_json:
@@ -144,6 +142,12 @@ outputs:
     label: "Aggregation metadata in CSV format"
     doc: "Aggregation metadata in CSV format"
 
+  grouping_data:
+    type: File
+    outputSource: aggregate_counts/grouping_data
+    label: "Example of datasets grouping"
+    doc: "Example of TSV file to define datasets grouping"
+
   loupe_browser_track:
     type: File
     outputSource: aggregate_counts/loupe_browser_track
@@ -155,10 +159,10 @@ outputs:
     outputSource: aggregate_counts/clonotypes_csv
     label: "CSV file with high-level descriptions of each clonotype"
     doc: "CSV file with high-level descriptions of each clonotype"
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - syncfusiongrid:
-        tab: 'V(D)J clonotypes'
-        Title: 'V(D)J clonotypes'
+        tab: "V(D)J clonotypes"
+        Title: "V(D)J clonotypes"
 
   consensus_sequences_fasta:
     type: File?
@@ -184,6 +188,15 @@ outputs:
     label: "Loupe V(D)J Browser visualization and analysis file"
     doc: "Loupe V(D)J Browser visualization and analysis file"
 
+  airr_rearrangement_tsv:
+    type: File?
+    outputSource: aggregate_counts/airr_rearrangement_tsv
+    label: "Annotated contigs and consensus sequences of V(D)J rearrangements in the AIRR format"
+    doc: |
+      Annotated contigs and consensus sequences of V(D)J
+      rearrangements in the AIRR format. It includes only
+      viable cells identified by both V(D)J and RNA algorithms.
+
   compressed_html_data_folder:
     type: File
     outputSource: compress_html_data_folder/compressed_folder
@@ -201,9 +214,9 @@ outputs:
     outputSource: cellbrowser_build/index_html_file
     label: "CellBrowser formatted Cellranger report"
     doc: "CellBrowser formatted Cellranger report"
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - linkList:
-        tab: 'Overview'
+        tab: "Overview"
         target: "_blank"
 
   aggregate_counts_stdout_log:
@@ -239,12 +252,14 @@ steps:
     - filtered_feature_bc_matrix_folder
     - filtered_feature_bc_matrix_h5
     - aggregation_metadata
+    - grouping_data
     - loupe_browser_track
     - clonotypes_csv
     - consensus_sequences_fasta
     - consensus_annotations_csv
     - filtered_contig_annotations_csv
     - loupe_vdj_browser_track
+    - airr_rearrangement_tsv
     - stdout_log
     - stderr_log
 
@@ -286,9 +301,9 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-label: "Cell Ranger Aggregate"
-s:name: "Cell Ranger Aggregate"
-s:alternateName: "Aggregates data from multiple Cell Ranger Count Gene Expression experiments"
+label: "Cell Ranger Aggregate (RNA, RNA+VDJ)"
+s:name: "Cell Ranger Aggregate (RNA, RNA+VDJ)"
+s:alternateName: "Combines outputs from multiple runs of either Cell Ranger Count (RNA) or Cell Ranger Count (RNA+VDJ) pipelines"
 
 s:downloadUrl: https://raw.githubusercontent.com/datirium/workflows/master/workflows/cellranger-aggr.cwl
 s:codeRepository: https://github.com/datirium/workflows
@@ -326,7 +341,9 @@ s:creator:
 
 
 doc: |
-  Cell Ranger Aggregate
-  
-  Aggregates outputs from multiple runs of Cell Ranger Count Gene Expression or
-  Cell Ranger Multi Gene Expression and V(D)J Repertoire Profiling experiments
+  Cell Ranger Aggregate (RNA, RNA+VDJ)
+
+  Combines outputs from multiple runs of either “Cell Ranger Count (RNA)”
+  or “Cell Ranger Count (RNA+VDJ)” pipelines. The results of this workflow
+  are primarily used in “Single-Cell RNA-Seq Filtering Analysis” and
+  “Single-Cell Immune Profiling Analysis” pipelines.

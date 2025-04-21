@@ -13,7 +13,7 @@ inputs:
 
   alias:
     type: string
-    label: "Experiment short name/Alias"
+    label: "Experiment short name/alias"
     sd:preview:
       position: 1
 
@@ -32,6 +32,36 @@ inputs:
       GTF annotation file. Should include gene_biotype/transcript_biotype fields.
       For example:
       https://ftp.ensembl.org/pub/current_gtf/homo_sapiens/Homo_sapiens.GRCh38.108.gtf.gz
+
+  memory_limit:
+    type: int?
+    default: 20
+    label: "Maximum memory used (GB)"
+    doc: |
+      Maximum memory used (GB).
+    "sd:layout":
+      advanced: true
+
+  threads:
+    type:
+    - "null"
+    - type: enum
+      symbols:
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+      - "6"
+    default: "4"
+    label: "Cores/CPUs"
+    doc: |
+      Parallelization parameter to define the
+      number of cores/CPUs that can be utilized
+      simultaneously.
+      Default: 4
+    "sd:layout":
+      advanced: true
 
 
 outputs:
@@ -84,6 +114,10 @@ steps:
     in:
       genome_fasta_file: extract_fasta/extracted_file
       annotation_gtf_file: extract_gtf/extracted_file
+      threads:
+        source: threads
+        valueFrom: $(parseInt(self))
+      memory_limit: memory_limit
       output_folder_name:
         default: "cellranger_vdj_ref"
     out:
@@ -98,9 +132,9 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-label: "Cell Ranger Build V(D)J Reference Indices"
-s:name: "Cell Ranger Build V(D)J Reference Indices"
-s:alternateName: "Build a Cell Ranger V(D)J-compatible reference folder from a user-supplied genome FASTA and gene GTF files"
+label: "Cell Ranger Reference (VDJ)"
+s:name: "Cell Ranger Reference (VDJ)"
+s:alternateName: "Builds a reference genome of a selected species for V(D)J contigs assembly and clonotype calling"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows-datirium/master/workflows/cellranger-mkvdjref.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows-datirium
@@ -138,7 +172,8 @@ s:creator:
 
 
 doc: |
-  Cell Ranger Build V(D)J Reference Indices
+  Cell Ranger Reference (VDJ)
 
-  Build a Cell Ranger V(D)J-compatible reference folder from
-  a user-supplied genome FASTA and gene GTF files.
+  Builds a reference genome of a selected species for V(D)J
+  contigs assembly and clonotype calling. The results of this
+  workflow are used in “Cell Ranger Count (RNA+VDJ)” pipeline.

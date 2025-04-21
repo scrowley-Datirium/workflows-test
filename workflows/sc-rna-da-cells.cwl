@@ -14,95 +14,175 @@ requirements:
       };
 
 
-'sd:upstream':
+"sd:upstream":
   sc_tools_sample:
-  - "sc-rna-reduce.cwl"
-  - "sc-atac-reduce.cwl"
   - "sc-rna-cluster.cwl"
   - "sc-atac-cluster.cwl"
   - "sc-wnn-cluster.cwl"
   - "sc-ctype-assign.cwl"
-  - "sc-rna-de-pseudobulk.cwl"
 
 
 inputs:
 
   alias:
     type: string
-    label: "Experiment short name/alias"
+    label: "Analysis name"
     sd:preview:
       position: 1
 
   query_data_rds:
     type: File
-    label: "Experiment run through Single-cell RNA-Seq Dimensionality Reduction Analysis"
+    label: "Single-cell Analysis with Clustered RNA/ATAC-Seq or WNN Datasets"
     doc: |
-      Path to the RDS file to load Seurat object from. This file should include genes
-      expression information stored in the RNA assay and selected with the --reduction
-      parameter dimensionality reduction. Additionally, 'rnaumap', and/or 'atacumap',
-      and/or 'wnnumap' dimensionality reductions should be present.
-    'sd:upstreamSource': "sc_tools_sample/seurat_data_rds"
-    'sd:localLabel': true
+      Analysis that includes single-cell
+      multiome RNA and ATAC-Seq or just
+      RNA-Seq datasets run through either
+      "Single-Cell Manual Cell Type
+      Assignment", "Single-Cell RNA-Seq
+      Cluster Analysis", "Single-Cell
+      ATAC-Seq Cluster Analysis", or
+      "Single-Cell WNN Cluster Analysis"
+      at any of the processing stages.
+    "sd:upstreamSource": "sc_tools_sample/seurat_data_rds"
+    "sd:localLabel": true
 
-  splitby:
-    type: string
-    label: "Column from the Seurat object metadata to split cells into two groups"
+  query_reduction:
+    type:
+    - "null"
+    - type: enum
+      symbols:
+      - "RNA"
+      - "ATAC"
+      - "WNN"
+    default: "RNA"
+    label: "Dimensionality reduction"
     doc: |
-      Column from the Seurat object metadata to split cells into two groups
-      to run --second vs --first DA analysis. May include columns from the
-      extra metadata added with --metadata parameter.
-
-  first_cond:
-    type: string
-    label: "Value from the Seurat object metadata column to define the first group of cells"
-    doc: |
-      Value from the Seurat object metadata column set with --splitby to define
-      the first group of cells for DA analysis.
-
-  second_cond:
-    type: string
-    label: "Value from the Seurat object metadata column to define the second group of cells"
-    doc: |
-      Value from the Seurat object metadata column set with --splitby to define
-      the second group of cells for DA analysis.
+      Dimensionality reduction to be used
+      for generating UMAP plots.
 
   dimensions:
     type: int?
-    default: 20
-    label: "Dimensionality to use when running DA analysis (from 1 to 50)"
+    default: 10
+    label: "Dimensionality to be used when running differential abundance analysis (from 1 to 50)"
     doc: |
-      Dimensionality to use when running DA analysis (from 1 to 50).
-      If single value N is provided, use from 1 to N PCs. If multiple
-      values are provided, subset to only selected PCs.
-      Default: from 1 to 10
+      Dimensionality to be used when running differential
+      abundance analysis with DAseq (from 1 to 50).
+      Default: 10
 
-  resolution:
-    type: string?
-    default: "0.05 0.1 0.15"
-    label: "Clustering resolution applied to DA cells to identify DA cells populations"
+  groupby:
+    type: string
+    label: "Grouping category (cluster, cell type, etc.)"
     doc: |
-      Clustering resolution applied to DA cells to identify DA cells populations.
-      Can be set as an array.
-      Default: 0.01, 0.03, 0.05
+      Single cell metadata column to group
+      cells by categories, such as clusters,
+      cell types, etc., when generating UMAP
+      and composition plots. Custom groups
+      can be defined based on any single cell
+      metadata added through the "Datasets
+      metadata (optional)" or "Selected cell
+      barcodes (optional)"
+      inputs.
+
+  splitby:
+    type: string
+    label: "Comparison category"
+    doc: |
+      Single cell metadata column to split
+      cells into two comparison groups before
+      running differential abundance analysis.
+      To split cells by dataset, use "dataset".
+      Custom groups can be defined based on
+      any single cell metadata added through
+      the "Datasets metadata (optional)" or
+      "Selected cell barcodes (optional)"
+      inputs. The direction of comparison is
+      always "Second comparison group" vs
+      "First comparison group".
+
+  first_cond:
+    type: string
+    label: "First comparison group"
+    doc: |
+      Value from the single cell metadata
+      column selected in "Comparison category"
+      input to define the first group of cells
+      for differential abundance analysis.
+
+  second_cond:
+    type: string
+    label: "Second comparison group"
+    doc: |
+      Value from the single cell metadata
+      column selected in "Comparison category"
+      input to define the second group of cells
+      for differential abundance analysis.
 
   ranges:
     type: string?
-    default: "-0.5 0.5"
-    label: " DA scores ranges for to filter out not significant cells"
+    default: ""
+    label: "Minimum and maximum thresholds for differential abundance scores"
     doc: |
-      DA scores ranges for to filter out not significant cells.
-      Default: calculated based on the permutation test
+      Minimum and maximum thresholds to filter
+      out cells with the low (by absolute
+      values) differential abundance scores.
+      Can be set in a form of a comma- or
+      space-separated list.
+      Default: calculated based on the
+      permutation test.
 
   datasets_metadata:
     type: File?
-    label: "Path to the TSV/CSV file to optionally extend Seurat object metadata"
+    label: "Datasets metadata (optional)"
     doc: |
-      Path to the TSV/CSV file to optionally extend Seurat object metadata with
-      categorical values using samples identities. First column - 'library_id'
-      should correspond to all unique values from the 'new.ident' column of the
-      loaded Seurat object. If any of the provided in this file columns are already
-      present in the Seurat object metadata, they will be overwritten.
-      Default: no extra metadata is added
+      If the selected single-cell analysis
+      includes multiple aggregated datasets,
+      each of them can be assigned to a
+      separate group by one or multiple
+      categories. This can be achieved by
+      providing a TSV/CSV file with
+      "library_id" as the first column and
+      any number of additional columns with
+      unique names, representing the desired
+      grouping categories.
+
+  barcodes_data:
+    type: File?
+    label: "Selected cell barcodes (optional)"
+    doc: |
+      A TSV/CSV file to optionally prefilter
+      the single cell data by including only
+      the cells with the selected barcodes.
+      The provided file should include at
+      least one column named "barcode", with
+      one cell barcode per line. All other
+      columns, except for "barcode", will be
+      added to the single cell metadata loaded
+      from "Single-cell Analysis with Clustered
+      RNA/ATAC-Seq or WNN Datasets" and can be
+      utilized in the current or future steps
+      of the analysis.
+
+  export_loupe_data:
+    type: boolean?
+    default: false
+    label: "Save raw counts to Loupe file. I confirm that data is generated by 10x technology and accept the EULA available at https://10xgen.com/EULA"
+    doc: |
+      Save raw counts from the RNA assay to Loupe file. By
+      enabling this feature you accept the End-User License
+      Agreement available at https://10xgen.com/EULA.
+      Default: false
+    "sd:layout":
+      advanced: true
+
+  export_html_report:
+    type: boolean?
+    default: true
+    label: "Show HTML report"
+    doc: |
+      Export tehcnical report in HTML format.
+      Default: true
+    "sd:layout":
+      advanced: true
 
   color_theme:
     type:
@@ -123,36 +203,7 @@ inputs:
       Color theme for all generated plots. One of gray, bw, linedraw, light,
       dark, minimal, classic, void.
       Default: classic
-    'sd:layout':
-      advanced: true
-
-  parallel_memory_limit:
-    type:
-    - "null"
-    - type: enum
-      symbols:
-      - "32"
-    default: "32"
-    label: "Maximum memory in GB allowed to be shared between the workers when using multiple CPUs"
-    doc: |
-      Maximum memory in GB allowed to be shared between the workers
-      when using multiple --cpus.
-      Forced to 32 GB
-    'sd:layout':
-      advanced: true
-
-  vector_memory_limit:
-    type:
-    - "null"
-    - type: enum
-      symbols:
-      - "64"
-    default: "64"
-    label: "Maximum vector memory in GB allowed to be used by R"
-    doc: |
-      Maximum vector memory in GB allowed to be used by R.
-      Forced to 64 GB
-    'sd:layout':
+    "sd:layout":
       advanced: true
 
   threads:
@@ -161,207 +212,220 @@ inputs:
     - type: enum
       symbols:
       - "1"
-    default: "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+      - "6"
+    default: "4"
     label: "Number of cores/cpus to use"
     doc: |
-      Number of cores/cpus to use
-      Forced to 1
-    'sd:layout':
+      Parallelization parameter to define the
+      number of cores/CPUs that can be utilized
+      simultaneously.
+      Default: 4
+    "sd:layout":
       advanced: true
 
 
 outputs:
 
-  da_perm_plot_png:
+  umap_gr_tst_plot_png:
     type: File?
-    outputSource: da_cells/da_perm_plot_png
-    label: "DA scores random permutations plot"
+    outputSource: da_cells/umap_gr_tst_plot_png
+    label: "UMAP colored by tested condition (downsampled)"
     doc: |
-      DA scores random permutations plot for second
-      vs first biological conditions comparison.
-      PNG format
-    'sd:visualPlugins':
+      UMAP colored by tested condition. First downsampled
+      to the smallest dataset, then downsampled to the
+      smallest tested condition group.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Overall'
-        Caption: 'DA scores random permutations plot'
+        tab: "QC"
+        Caption: "UMAP colored by tested condition (downsampled)"
 
-  umap_rd_rnaumap_res_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputSource: da_cells/umap_rd_rnaumap_res_plot_png
-    label: "Clustered DA cells subpopulations RNA UMAP"
-    doc: |
-      Clustered DA cells subpopulations UMAP (rnaumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
-    - image:
-        tab: 'Overall'
-        Caption: 'Clustered DA cells subpopulations RNA UMAP'
-
-  umap_rd_atacumap_res_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputSource: da_cells/umap_rd_atacumap_res_plot_png
-    label: "Clustered DA cells subpopulations ATAC UMAP"
-    doc: |
-      Clustered DA cells subpopulations UMAP (atacumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
-    - image:
-        tab: 'Overall'
-        Caption: 'Clustered DA cells subpopulations ATAC UMAP'
-
-  umap_rd_wnnumap_res_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputSource: da_cells/umap_rd_wnnumap_res_plot_png
-    label: "Clustered DA cells subpopulations WNN UMAP"
-    doc: |
-      Clustered DA cells subpopulations UMAP (wnnumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
-    - image:
-        tab: 'Overall'
-        Caption: 'Clustered DA cells subpopulations WNN UMAP'
-
-  umap_spl_cnd_rd_rnaumap_res_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputSource: da_cells/umap_spl_cnd_rd_rnaumap_res_plot_png
-    label: "Split by grouping condition clustered DA cells subpopulations RNA UMAP"
-    doc: |
-      Split by grouping condition clustered DA cells subpopulations UMAP
-      (rnaumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
-    - image:
-        tab: 'Per group'
-        Caption: 'Split by grouping condition clustered DA cells subpopulations RNA UMAP'
-
-  umap_spl_cnd_rd_atacumap_res_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputSource: da_cells/umap_spl_cnd_rd_atacumap_res_plot_png
-    label: "Split by grouping condition clustered DA cells subpopulations ATAC UMAP"
-    doc: |
-      Split by grouping condition clustered DA cells subpopulations UMAP
-      (atacumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
-    - image:
-        tab: 'Per group'
-        Caption: 'Split by grouping condition clustered DA cells subpopulations ATAC UMAP'
-
-  umap_spl_cnd_rd_wnnumap_res_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputSource: da_cells/umap_spl_cnd_rd_wnnumap_res_plot_png
-    label: "Split by grouping condition clustered DA cells subpopulations WNN UMAP"
-    doc: |
-      Split by grouping condition clustered DA cells subpopulations UMAP
-      (wnnumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
-    - image:
-        tab: 'Per group'
-        Caption: 'Split by grouping condition clustered DA cells subpopulations WNN UMAP'
-
-  umap_spl_idnt_rd_rnaumap_da_scr_plot_png:
+  umap_da_scr_cnt_plot_png:
     type: File?
-    outputSource: da_cells/umap_spl_idnt_rd_rnaumap_da_scr_plot_png
-    label: "Split by dataset cells RNA UMAP with DA scores"
+    outputSource: da_cells/umap_da_scr_cnt_plot_png
+    label: "UMAP colored by differential abundance score (all cells, continuous scale)"
     doc: |
-      Split by dataset cells UMAP with DA scores for second vs first
-      biological conditions comparison (rnaumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      UMAP colored by differential abundance score,
+      continuous scale. All cells.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per dataset'
-        Caption: 'Split by dataset cells RNA UMAP with DA scores'
+        tab: "QC"
+        Caption: "UMAP colored by differential abundance score (all cells, continuous scale)"
 
-  umap_spl_idnt_rd_atacumap_da_scr_plot_png:
+  rank_da_scr_plot_png:
     type: File?
-    outputSource: da_cells/umap_spl_idnt_rd_atacumap_da_scr_plot_png
-    label: "Split by dataset cells ATAC UMAP with DA scores"
+    outputSource: da_cells/rank_da_scr_plot_png
+    label: "Estimated thresholds for differential abundance score (all cells)"
     doc: |
-      Split by dataset cells UMAP with DA scores for second vs first
-      biological conditions comparison (atacumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      Estimated thresholds for
+      differential abundance score.
+      All cells.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per dataset'
-        Caption: 'Split by dataset cells ATAC UMAP with DA scores'
+        tab: "QC"
+        Caption: "Estimated thresholds for differential abundance score (all cells)"
 
-  umap_spl_idnt_rd_wnnumap_da_scr_plot_png:
+  umap_da_scr_ctg_plot_png:
     type: File?
-    outputSource: da_cells/umap_spl_idnt_rd_wnnumap_da_scr_plot_png
-    label: "Split by dataset cells WNN UMAP with DA scores"
+    outputSource: da_cells/umap_da_scr_ctg_plot_png
+    label: "UMAP colored by differential abundance score (all cells, categorical scale)"
     doc: |
-      Split by dataset cells UMAP with DA scores for second vs first
-      biological conditions comparison (wnnumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      UMAP colored by differential abundance score,
+      categorical scale. All cells; categories are
+      defined based on the selected ranges for
+      the differential abundance score.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per dataset'
-        Caption: 'Split by dataset cells WNN UMAP with DA scores'
+        tab: "QC"
+        Caption: "UMAP colored by differential abundance score (all cells, categorical scale)"
 
-  ucsc_cb_config_data:
-    type: File
-    outputSource: compress_cellbrowser_config_data/compressed_folder
-    label: "Compressed directory with UCSC Cellbrowser configuration data"
+  umap_gr_clst_spl_tst_plot_png:
+    type: File?
+    outputSource: da_cells/umap_gr_clst_spl_tst_plot_png
+    label: "UMAP colored by cluster (split by tested condition, downsampled)"
     doc: |
-      Compressed directory with UCSC Cellbrowser configuration data.
+      UMAP colored by cluster. Split by tested condition;
+      first downsampled to the smallest dataset, then
+      downsampled to the smallest tested condition group.
+      PNG format.
+    "sd:visualPlugins":
+    - image:
+        tab: "Composition"
+        Caption: "UMAP colored by cluster (split by tested condition, downsampled)"
+
+  cmp_gr_tst_spl_clst_plot_png:
+    type: File?
+    outputSource: da_cells/cmp_gr_tst_spl_clst_plot_png
+    label: "Composition plot colored by tested condition (split by cluster, downsampled)"
+    doc: |
+      Composition plot colored by tested condition. Split by
+      cluster; first downsampled to the smallest dataset,
+      then downsampled to the smallest tested condition group.
+      PNG format.
+    "sd:visualPlugins":
+    - image:
+        tab: "Composition"
+        Caption: "Composition plot colored by tested condition (split by cluster, downsampled)"
+
+  cmp_gr_clst_spl_tst_plot_png:
+    type: File?
+    outputSource: da_cells/cmp_gr_clst_spl_tst_plot_png
+    label: "Composition plot colored by cluster (split by tested condition, downsampled)"
+    doc: |
+      Composition plot colored by cluster. Split by tested
+      condition; first downsampled to the smallest dataset,
+      then downsampled to the smallest tested condition group.
+      PNG format.
+    "sd:visualPlugins":
+    - image:
+        tab: "Composition"
+        Caption: "Composition plot colored by cluster (split by tested condition, downsampled)"
+
+  cmp_bp_gr_tst_spl_clst_plot_png:
+    type: File?
+    outputSource: da_cells/cmp_bp_gr_tst_spl_clst_plot_png
+    label: "Composition box plot colored by tested condition (split by cluster, downsampled)"
+    doc: |
+      Composition box plot colored by tested condition.
+      Split by cluster; downsampled to the smallest
+      dataset.
+      PNG format.
+    "sd:visualPlugins":
+    - image:
+        tab: "Composition"
+        Caption: "Composition box plot colored by tested condition (split by cluster, downsampled)"
 
   ucsc_cb_html_data:
-    type: Directory
+    type: Directory?
     outputSource: da_cells/ucsc_cb_html_data
-    label: "Directory with UCSC Cellbrowser html data"
+    label: "UCSC Cell Browser (data)"
     doc: |
-      Directory with UCSC Cellbrowser html data.
+      UCSC Cell Browser html data.
 
   ucsc_cb_html_file:
-    type: File
+    type: File?
     outputSource: da_cells/ucsc_cb_html_file
-    label: "Open in UCSC Cell Browser"
+    label: "UCSC Cell Browser"
     doc: |
-      HTML index file from the directory with UCSC Cellbrowser html data.
-    'sd:visualPlugins':
+      UCSC Cell Browser html index.
+    "sd:visualPlugins":
     - linkList:
-        tab: 'Overview'
+        tab: "Overview"
         target: "_blank"
 
   seurat_data_rds:
     type: File
     outputSource: da_cells/seurat_data_rds
-    label: "Processed Seurat data in RDS format"
+    label: "Seurat object in RDS format"
     doc: |
-      Processed Seurat data in RDS format
+      Seurat object.
+      RDS format.
+
+  seurat_data_scope:
+    type: File?
+    outputSource: da_cells/seurat_data_scope
+    label: "Seurat object in SCope compatible loom format"
+    doc: |
+      Seurat object.
+      SCope compatible.
+      Loom format.
+
+  seurat_rna_data_cloupe:
+    type: File?
+    outputSource: da_cells/seurat_rna_data_cloupe
+    label: "Seurat object in Loupe format"
+    doc: |
+      Seurat object.
+      RNA counts.
+      Loupe format.
+
+  pdf_plots:
+    type: File
+    outputSource: compress_pdf_plots/compressed_folder
+    label: "Compressed folder with all PDF plots"
+    doc: |
+      Compressed folder with all PDF plots.
+
+  sc_report_html_file:
+    type: File?
+    outputSource: da_cells/sc_report_html_file
+    label: "Analysis log"
+    doc: |
+      Tehcnical report.
+      HTML format.
+    "sd:visualPlugins":
+    - linkList:
+        tab: "Overview"
+        target: "_blank"
+
+  da_cells_human_log:
+    type: File
+    outputSource: da_cells/human_log
+    label: "Human readable error log"
+    doc: |
+      Human readable error log
+      from the da_cells step.
 
   da_cells_stdout_log:
     type: File
     outputSource: da_cells/stdout_log
-    label: "stdout log generated by da_cells step"
+    label: "Output log"
     doc: |
-      stdout log generated by da_cells step
+      Stdout log from the da_cells step.
 
   da_cells_stderr_log:
     type: File
     outputSource: da_cells/stderr_log
-    label: "stderr log generated by da_cells step"
+    label: "Error log"
     doc: |
-      stderr log generated by da_cells step
+      Stderr log from the da_cells step.
 
 
 steps:
@@ -370,53 +434,91 @@ steps:
     run: ../tools/sc-rna-da-cells.cwl
     in:
       query_data_rds: query_data_rds
-      datasets_metadata: datasets_metadata
+      reduction:
+        source: query_reduction
+        valueFrom: |
+          ${
+            if (self == "RNA") {
+              return "rnaumap";
+            } else if (self == "ATAC") {
+              return "atacumap";
+            } else {
+              return "wnnumap";
+            }
+          }
       dimensions: dimensions
-      splitby: splitby
+      datasets_metadata: datasets_metadata
+      barcodes_data: barcodes_data
+      splitby:
+        source: splitby
+        valueFrom: |
+          ${
+            if (self == "dataset") {
+              return "new.ident";
+            } else {
+              return self;
+            }
+          }
       first_cond: first_cond
       second_cond: second_cond
-      resolution:
-        source: resolution
-        valueFrom: $(split_numbers(self))
+      groupby: groupby
       ranges:
         source: ranges
-        valueFrom: $(split_numbers(self))
+        valueFrom: $(split_numbers(self))    # "" will return null from split_numbers
       verbose:
         default: true
       export_ucsc_cb:
         default: true
+      export_scope_data:
+        default: true
+      export_loupe_data: export_loupe_data
+      export_pdf_plots:
+        default: true
       color_theme: color_theme
       parallel_memory_limit:
-        source: parallel_memory_limit
-        valueFrom: $(parseInt(self))
+        default: 32
       vector_memory_limit:
-        source: vector_memory_limit
-        valueFrom: $(parseInt(self))
+        default: 128
+      export_html_report: export_html_report
       threads:
         source: threads
         valueFrom: $(parseInt(self))
     out:
-    - da_perm_plot_png
-    - umap_rd_rnaumap_res_plot_png
-    - umap_rd_atacumap_res_plot_png
-    - umap_rd_wnnumap_res_plot_png
-    - umap_spl_cnd_rd_rnaumap_res_plot_png
-    - umap_spl_cnd_rd_atacumap_res_plot_png
-    - umap_spl_cnd_rd_wnnumap_res_plot_png
-    - umap_spl_idnt_rd_rnaumap_da_scr_plot_png
-    - umap_spl_idnt_rd_atacumap_da_scr_plot_png
-    - umap_spl_idnt_rd_wnnumap_da_scr_plot_png
-    - ucsc_cb_config_data
-    - ucsc_cb_html_data
-    - ucsc_cb_html_file
-    - seurat_data_rds
-    - stdout_log
-    - stderr_log
+      - cmp_bp_gr_tst_spl_clst_plot_png
+      - umap_gr_tst_plot_png
+      - umap_da_scr_ctg_plot_png
+      - umap_da_scr_cnt_plot_png
+      - umap_gr_clst_spl_tst_plot_png
+      - cmp_gr_clst_spl_tst_plot_png
+      - cmp_gr_tst_spl_clst_plot_png
+      - rank_da_scr_plot_png
+      - all_plots_pdf
+      - ucsc_cb_html_data
+      - ucsc_cb_html_file
+      - seurat_data_rds
+      - seurat_data_scope
+      - seurat_rna_data_cloupe
+      - sc_report_html_file
+      - human_log
+      - stdout_log
+      - stderr_log
 
-  compress_cellbrowser_config_data:
+  folder_pdf_plots:
+    run: ../tools/files-to-folder.cwl
+    in:
+      input_files:
+        source:
+        - da_cells/all_plots_pdf
+        valueFrom: $(self.flat().filter(n => n))
+      folder_basename:
+        default: "pdf_plots"
+    out:
+    - folder
+
+  compress_pdf_plots:
     run: ../tools/tar-compress.cwl
     in:
-      folder_to_compress: da_cells/ucsc_cb_config_data
+      folder_to_compress: folder_pdf_plots/folder
     out:
     - compressed_folder
 
@@ -427,9 +529,9 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-label: "Single-cell Differential Abundance Analysis"
-s:name: "Single-cell Differential Abundance Analysis"
-s:alternateName: "Detects cell subpopulations with differential abundance between datasets split by biological condition"
+label: "Single-Cell Differential Abundance Analysis"
+s:name: "Single-Cell Differential Abundance Analysis"
+s:alternateName: "Single-Cell Differential Abundance Analysis"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows-datirium/master/workflows/sc-rna-da-cells.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows-datirium
@@ -467,7 +569,7 @@ s:creator:
 
 
 doc: |
-  Single-cell Differential Abundance Analysis
+  Single-Cell Differential Abundance Analysis
 
-  Detects cell subpopulations with differential abundance
-  between datasets split by biological condition.
+  Compares the composition of cell types between
+  two tested conditions

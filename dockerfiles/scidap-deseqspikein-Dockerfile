@@ -1,0 +1,130 @@
+#################################################################
+# Dockerfile
+#
+# Software:         BioWardrobe DESeq/DESeq2 script
+# Software Version: v0.0.27
+# Description:      Dockerized version of DESeq/DESeq2 script from BioWardrobe
+# Website:          https://github.com/Barski-lab/workflows
+# Provides:         run_deseq.R
+#                   run_deseq_lrt.R
+#                   get_gene_n_tss.R
+#                   run_deseq_manual.R
+#                   BiocManager       1.30.10
+#                   BiocParallel      1.22.0
+#                   DESeq             1.39.0
+#                   DESeq2            1.28.1
+#                   argparse          latest
+#                   pheatmap          latest
+# Base Image:       r-base:4.0.2
+# Build Cmd:        docker build --no-cache --rm -t deseqspikein-dev -f scidap-deseqspikein-Dockerfile . > ~/Desktop/dockerbuild.log 2>&1
+# Run Cmd:          docker run --rm -ti deseqspikein-dev /bin/bash
+# Push Cmd1:        docker tag deseqspikein-dev avivdemorgan/scidap-deseqspikein:dev
+#      Cmd2:        docker image push robertplayer/scidap-deseqspikein:dev
+# Pull Cmd:         docker pull robertplayer/scidap-deseqspikein:dev
+# Test dev:         docker run --rm -ti robertplayer/scidap-deseqspikein:dev /bin/bash
+# re-tag for PR:    docker tag deseqspikein-dev robertplayer/scidap-deseqspikein:v1.0.0
+# Push for PR:      docker image push robertplayer/scidap-deseqspikein:v1.0.0
+# Test vx.x.x:      docker run --rm -ti robertplayer/scidap-deseqspikein:v1.0.0 /bin/bash
+#################################################################
+#
+# v1.0.0
+# - copied this dockerfile (scidap-deseq-Dockerfile, v1.0.0) and the run_deseq.R script from Barski lab to Datirium repo
+# - Update run_deseq.R to output both all genes and filtered gene list by padj
+# - Added run_deseq_for_spikein.R to image for ERCC spike-in RNA-Seq samples
+# - This new Rscript runs DESeq with sizeFactors set to 1 for all samples
+# - Input count matrix is expected to already be normalized for size from spike-in counts (see trim-rnaseq-pe-ercc.cwl for normalization details)
+#
+#################################################################
+
+
+### Base Image
+# FROM r-base:4.0.4     # this is the original, initial base image; pulled from Barski lab repo, so building from that base
+# FROM biowardrobe2/scidap-deseq:v0.0.27    # for faster build tests
+# for even faster build tests, run from latest stable build
+#FROM avivdemorgan/scidap-deseqspikein:dev
+#FROM robertplayer/scidap-deseq:dev
+FROM ubuntu:latest
+LABEL maintainer="aviv.de.morgan@datirium.com"
+ENV DEBIAN_FRONTEND noninteractive
+
+################## BEGIN INSTALLATION ######################
+
+WORKDIR /tmp
+
+ENV VERSION_BIOCMANAGER 1.30.25
+ENV URL_BIOCMANAGER "https://cran.r-project.org/src/contrib/BiocManager_${VERSION_BIOCMANAGER}.tar.gz"
+#ENV VERSION_LOCFIT 1.5-9.4
+ENV VERSION_LOCFIT 1.5-9.12
+ENV URL_LOCFIT "https://cran.r-project.org/src/contrib/Archive/locfit/locfit_${VERSION_LOCFIT}.tar.gz"
+
+COPY ./scripts/install_from_source.R /tmp/install_from_source.R
+#COPY ./scripts/run_deseq.R /usr/local/bin/run_deseq.R
+COPY ./scripts/run_deseq_for_spikein.R /usr/local/bin/run_deseq_for_spikein.R
+#COPY ./scripts/run_deseq_lrt.R /usr/local/bin/run_deseq_lrt.R
+#COPY ./scripts/get_gene_n_tss.R /usr/local/bin/get_gene_n_tss.R
+RUN chmod +x /tmp/install_from_source.R
+RUN echo "test"
+### Installing python3, pip3 and argparse
+#RUN apt-get clean && \
+#	dpkg --configure -a && \
+#	apt-get -f install && \
+#	apt-get update
+RUN chmod +x /usr/local/bin/run_deseq_for_spikein.R && \
+    ls -la /usr/local/bin/run_deseq_for_spikein.R
+    #chmod +x /usr/local/bin/run_deseq_lrt.R && \
+    #ls -la /usr/local/bin/run_deseq_lrt.R && \
+    #chmod +x /usr/local/bin/get_gene_n_tss.R && \
+    #ls -la /usr/local/bin/get_gene_n_tss.R && \
+    # Cleaning
+    #apt-get clean && \
+    #apt-get purge && \
+    #rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /usr/share/doc/*
+    #strip /usr/local/bin/*; true
+
+RUN apt-get update
+RUN apt-get -f install
+#RUN apt-get install -y gcc-10-base
+#RUN apt-get install -y libgcc-10-dev 
+RUN apt-get install -y python3-dev
+RUN apt-get install -y python3-pip
+RUN apt-get install -y libxml2-dev
+RUN apt-get install -y libssl-dev
+RUN apt-get install -y libcurl4-openssl-dev
+RUN apt-get install -y pandoc
+RUN apt-get install -y libfontconfig1-dev
+RUN apt-get install -y libharfbuzz-dev
+RUN apt-get install -y libfribidi-dev
+RUN apt-get install -y libfreetype-dev
+RUN apt-get install -y libpng-dev
+RUN apt-get install -y libtiff5-dev
+RUN apt-get install -y libjpeg-dev
+RUN apt-get install -y vim
+RUN pip3 install argparse --break-system-packages
+RUN apt-get install -y r-base-dev 
+    # Installing biocmanager, biocparallel, deseq, deseq2, argparse, pheatmap
+RUN Rscript /tmp/install_from_source.R "${URL_BIOCMANAGER}"  
+RUN Rscript /tmp/install_from_source.R "${URL_LOCFIT}"  
+#RUN R -e "BiocManager::install(version = '3.11', update=FALSE, ask=FALSE)"
+#RUN R -e "BiocManager::install()" 
+RUN R -e "BiocManager::install(c('BiocParallel', 'DESeq', 'DESeq2', 'limma', 'EnhancedVolcano', 'hopach'), update=TRUE, ask=FALSE)"  
+RUN R -e 'install.packages("remotes", repo = "https://cloud.r-project.org/")'  
+RUN R -e 'install.packages("tidyverse", repo = "https://cloud.r-project.org/")'  
+RUN R -e 'install.packages("patchwork", repo = "https://cloud.r-project.org/")'  
+RUN R -e 'install.packages("argparse", repo = "https://cloud.r-project.org/")'  
+RUN R -e 'install.packages("data.table", repo = "https://cloud.r-project.org/")'  
+RUN R -e 'install.packages("pheatmap", repo = "https://cloud.r-project.org/")'  
+RUN R -e 'install.packages("ggrepel", repo = "https://cloud.r-project.org/")'  
+RUN R -e 'install.packages("htmlwidgets", repo = "https://cloud.r-project.org/")'  
+RUN R -e 'install.packages("devtools", repo = "https://cloud.r-project.org/")'
+RUN R -e 'devtools::install_github("hasaru-k/GlimmaV2")'
+RUN R -e 'devtools::install_github("RGLab/RProtoBufLib")'
+RUN R -e 'devtools::install_github("RGLab/cytolib")'
+RUN R -e 'devtools::install_github("RGLab/flowCore")'
+RUN R -e 'devtools::install_github("cmap/cmapR")'
+
+    # make script executable from $PATH
+    #chmod +x /usr/local/bin/run_deseq.R && \
+    #ls -la /usr/local/bin/run_deseq.R && \
+
+RUN export PATH="$PATH:/usr/local/bin"
+#RUN chown -R docker:docker /usr/local/bin

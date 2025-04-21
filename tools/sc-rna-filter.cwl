@@ -4,12 +4,6 @@ class: CommandLineTool
 
 requirements:
 - class: InlineJavascriptRequirement
-- class: InitialWorkDirRequirement
-  listing:
-  - entryname: dummy_metadata.csv
-    entry: |
-      library_id
-      Experiment
 - class: EnvVarRequirement
   envDef:
     R_MAX_VSIZE: $((inputs.vector_memory_limit * 1000000000).toString())
@@ -17,7 +11,7 @@ requirements:
 
 hints:
 - class: DockerRequirement
-  dockerPull: biowardrobe2/sc-tools:v0.0.21
+  dockerPull: biowardrobe2/sc-tools:v0.0.41
 
 
 inputs:
@@ -32,10 +26,15 @@ inputs:
 
   aggregation_metadata:
     type: File?
+    inputBinding:
+      prefix: "--identity"
     doc: |
-      Path to the metadata TSV/CSV file to set the datasets identities. If '--mex' points to
-      the Cell Ranger Aggregate outputs, the aggregation.csv file can be used. If input is not
-      provided, the default dummy_metadata.csv will be used instead.
+      Path to the metadata TSV/CSV file to set the datasets identities, if '--mex' points to
+      the Cell Ranger Aggregate outputs. The aggregation.csv file can be used. In case of
+      using feature-barcode matrices the file with identities should include at least one
+      column - 'library_id', and a row with aliases per each experiment from the '--mex'
+      input. The order of rows should correspond to the order of feature-barcode matrices
+      provided in the '--mex' parameter.
 
   grouping_data:
     type: File?
@@ -79,7 +78,8 @@ inputs:
     doc: |
       Include cells where at least this many genes are detected. If multiple values
       provided, each of them will be applied to the correspondent dataset from the
-      '--mex' input based on the '--identity' file.
+      '--mex' input based on the '--identity' file. Any 0 will be replaced with the
+      auto-estimated threshold (median - 2.5 * MAD) calculated per dataset.
       Default: 250 (applied to all datasets)
 
   maximum_genes:
@@ -92,20 +92,23 @@ inputs:
     doc: |
       Include cells with the number of genes not bigger than this value. If multiple
       values provided, each of them will be applied to the correspondent dataset from
-      the '--mex' input based on the '--identity' file.
+      the '--mex' input based on the '--identity' file. Any 0 will be replaced with the
+      auto-estimated threshold (median + 5 * MAD) calculated per dataset.
       Default: 5000 (applied to all datasets)
 
-  rna_minimum_umi:
+  minimum_umis:
     type:
     - "null"
     - int
     - int[]
     inputBinding:
-      prefix: "--rnaminumi"
+      prefix: "--minumis"
     doc: |
-      Include cells where at least this many UMI (transcripts) are detected.
+      Include cells where at least this many RNA reads are detected.
       If multiple values provided, each of them will be applied to the correspondent
-      dataset from the '--mex' input based on the '--identity' file.
+      dataset from the '--mex' input based on the '--identity' file. Any 0 will be
+      replaced with the auto-estimated threshold (median - 2.5 * MAD) calculated
+      per dataset.
       Default: 500 (applied to all datasets)
 
   minimum_novelty_score:
@@ -135,8 +138,10 @@ inputs:
     inputBinding:
       prefix: "--maxmt"
     doc: |
-      Include cells with the percentage of transcripts mapped to mitochondrial
-      genes not bigger than this value.
+      Include cells with the percentage of RNA reads mapped to mitochondrial
+      genes not bigger than this value. Set to 0 for using an auto-estimated
+      threshold equal to the maximum among (median + 2 * MAD) values
+      calculated per dataset.
       Default: 5 (applied to all datasets)
 
   remove_doublets:
@@ -216,7 +221,17 @@ inputs:
     inputBinding:
       prefix: "--h5ad"
     doc: |
-      Save Seurat data to h5ad file.
+      Save raw counts from the RNA assay to h5ad file.
+      Default: false
+
+  export_loupe_data:
+    type: boolean?
+    inputBinding:
+      prefix: "--loupe"
+    doc: |
+      Save raw counts from the RNA assay to Loupe file. By
+      enabling this feature you accept the End-User License
+      Agreement available at https://10xgen.com/EULA.
       Default: false
 
   export_ucsc_cb:
@@ -225,6 +240,14 @@ inputs:
       prefix: "--cbbuild"
     doc: |
       Export results to UCSC Cell Browser. Default: false
+
+  export_html_report:
+    type: boolean?
+    default: false
+    doc: |
+      Export tehcnical report. HTML format.
+      Note, stdout will be less informative.
+      Default: false
 
   output_prefix:
     type: string?
@@ -258,6 +281,14 @@ inputs:
       Number of cores/cpus to use.
       Default: 1
 
+  seed:
+    type: int?
+    inputBinding:
+      prefix: "--seed"
+    doc: |
+      Seed number for random values.
+      Default: 42
+
 
 outputs:
 
@@ -266,494 +297,356 @@ outputs:
     outputBinding:
       glob: "*_raw_1_2_qc_mtrcs_pca.png"
     doc: |
-      PC1 and PC2 from the QC metrics PCA (not filtered).
-      PNG format
-
-  raw_1_2_qc_mtrcs_pca_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_raw_1_2_qc_mtrcs_pca.pdf"
-    doc: |
-      PC1 and PC2 from the QC metrics PCA (not filtered).
-      PDF format
+      QC metrics PCA.
+      Unfiltered; PC1/PC2.
+      PNG format.
 
   raw_2_3_qc_mtrcs_pca_plot_png:
     type: File?
     outputBinding:
       glob: "*_raw_2_3_qc_mtrcs_pca.png"
     doc: |
-      PC2 and PC3 from the QC metrics PCA (not filtered).
-      PNG format
+      QC metrics PCA.
+      Unfiltered; PC2/PC3.
+      PNG format.
 
-  raw_2_3_qc_mtrcs_pca_plot_pdf:
+  raw_cell_cnts_plot_png:
     type: File?
     outputBinding:
-      glob: "*_raw_2_3_qc_mtrcs_pca.pdf"
+      glob: "*_raw_cell_cnts.png"
     doc: |
-      PC2 and PC3 from the QC metrics PCA (not filtered).
-      PDF format
-
-  raw_cells_count_plot_png:
-    type: File?
-    outputBinding:
-      glob: "*_raw_cells_count.png"
-    doc: |
-      Number of cells per dataset (not filtered).
-      PNG format
-
-  raw_cells_count_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_raw_cells_count.pdf"
-    doc: |
-      Number of cells per dataset (not filtered).
-      PDF format
+      Number of cells per dataset.
+      Unfiltered.
+      PNG format.
 
   raw_umi_dnst_plot_png:
     type: File?
     outputBinding:
       glob: "*_raw_umi_dnst.png"
     doc: |
-      UMI per cell density (not filtered).
-      PNG format
-
-  raw_umi_dnst_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_raw_umi_dnst.pdf"
-    doc: |
-      UMI per cell density (not filtered).
-      PDF format
+      Distribution of RNA reads per cell.
+      Unfiltered.
+      PNG format.
 
   raw_gene_dnst_plot_png:
     type: File?
     outputBinding:
       glob: "*_raw_gene_dnst.png"
     doc: |
-      Genes per cell density (not filtered).
-      PNG format
+      Distribution of genes per cell.
+      Unfiltered.
+      PNG format.
 
-  raw_gene_dnst_plot_pdf:
+  raw_gene_umi_plot_png:
     type: File?
     outputBinding:
-      glob: "*_raw_gene_dnst.pdf"
+      glob: "*_raw_gene_umi.png"
     doc: |
-      Genes per cell density (not filtered).
-      PDF format
+      Genes vs RNA reads per cell.
+      Unfiltered.
+      PNG format.
 
-  raw_gene_umi_corr_plot_png:
+  raw_umi_mito_plot_png:
     type: File?
     outputBinding:
-      glob: "*_raw_gene_umi_corr.png"
+      glob: "*_raw_umi_mito.png"
     doc: |
-      Genes vs UMI per cell correlation (not filtered).
-      PNG format
-
-  raw_gene_umi_corr_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_raw_gene_umi_corr.pdf"
-    doc: |
-      Genes vs UMI per cell correlation (not filtered).
-      PDF format
+      RNA reads vs mitochondrial percentage
+      per cell.
+      Unfiltered.
+      PNG format.
 
   raw_mito_dnst_plot_png:
     type: File?
     outputBinding:
       glob: "*_raw_mito_dnst.png"
     doc: |
-      Percentage of transcripts mapped to mitochondrial genes per cell density (not filtered).
-      PNG format
-
-  raw_mito_dnst_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_raw_mito_dnst.pdf"
-    doc: |
-      Percentage of transcripts mapped to mitochondrial genes per cell density (not filtered).
-      PDF format
+      Distribution of RNA reads mapped
+      to mitochondrial genes per cell.
+      Unfiltered.
+      PNG format.
 
   raw_nvlt_dnst_plot_png:
     type: File?
     outputBinding:
       glob: "*_raw_nvlt_dnst.png"
     doc: |
-      Novelty score per cell density (not filtered).
-      PNG format
-
-  raw_nvlt_dnst_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_raw_nvlt_dnst.pdf"
-    doc: |
-      Novelty score per cell density (not filtered).
-      PDF format
+      Distribution of novelty score per cell.
+      Unfiltered.
+      PNG format.
 
   raw_qc_mtrcs_dnst_plot_png:
     type: File?
     outputBinding:
       glob: "*_raw_qc_mtrcs_dnst.png"
     doc: |
-      QC metrics per cell density (not filtered).
-      PNG format
-
-  raw_qc_mtrcs_dnst_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_raw_qc_mtrcs_dnst.pdf"
-    doc: |
-      QC metrics per cell density (not filtered).
-      PDF format
+      Distribution of QC metrics per cell.
+      Unfiltered.
+      PNG format.
 
   raw_rnadbl_plot_png:
     type: File?
     outputBinding:
       glob: "*_raw_rnadbl.png"
     doc: |
-      Percentage of RNA doublets per dataset (not filtered).
-      PNG format
-
-  raw_rnadbl_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_raw_rnadbl.pdf"
-    doc: |
-      Percentage of RNA doublets per dataset (not filtered).
-      PDF format
+      Percentage of RNA doublets.
+      Unfiltered.
+      PNG format.
 
   raw_umi_dnst_spl_cnd_plot_png:
     type: File?
     outputBinding:
       glob: "*_raw_umi_dnst_spl_cnd.png"
     doc: |
-      Split by grouping condition UMI per cell density (not filtered).
-      PNG format
-
-  raw_umi_dnst_spl_cnd_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_raw_umi_dnst_spl_cnd.pdf"
-    doc: |
-      Split by grouping condition UMI per cell density (not filtered).
-      PDF format
+      Distribution of RNA reads per cell.
+      Unfiltered; split by grouping condition.
+      PNG format.
 
   raw_gene_dnst_spl_cnd_plot_png:
     type: File?
     outputBinding:
       glob: "*_raw_gene_dnst_spl_cnd.png"
     doc: |
-      Split by grouping condition genes per cell density (not filtered).
-      PNG format
-
-  raw_gene_dnst_spl_cnd_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_raw_gene_dnst_spl_cnd.pdf"
-    doc: |
-      Split by grouping condition genes per cell density (not filtered).
-      PDF format
+      Distribution of genes per cell.
+      Unfiltered; split by grouping condition.
+      PNG format.
 
   raw_mito_dnst_spl_cnd_plot_png:
     type: File?
     outputBinding:
       glob: "*_raw_mito_dnst_spl_cnd.png"
     doc: |
-      Split by grouping condition the percentage of transcripts mapped
-      to mitochondrial genes per cell density (not filtered).
-      PNG format
-
-  raw_mito_dnst_spl_cnd_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_raw_mito_dnst_spl_cnd.pdf"
-    doc: |
-      Split by grouping condition the percentage of transcripts mapped
-      to mitochondrial genes per cell density (not filtered).
-      PDF format
+      Distribution of RNA reads mapped
+      to mitochondrial genes per cell.
+      Unfiltered; split by grouping condition.
+      PNG format.
 
   raw_nvlt_dnst_spl_cnd_plot_png:
     type: File?
     outputBinding:
       glob: "*_raw_nvlt_dnst_spl_cnd.png"
     doc: |
-      Split by grouping condition the novelty score per cell density (not filtered).
-      PNG format
-
-  raw_nvlt_dnst_spl_cnd_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_raw_nvlt_dnst_spl_cnd.pdf"
-    doc: |
-      Split by grouping condition the novelty score per cell density (not filtered).
-      PDF format
+      Distribution of novelty score per cell.
+      Unfiltered; split by grouping condition.
+      PNG format.
 
   fltr_1_2_qc_mtrcs_pca_plot_png:
     type: File?
     outputBinding:
       glob: "*_fltr_1_2_qc_mtrcs_pca.png"
     doc: |
-      PC1 and PC2 from the QC metrics PCA (filtered).
-      PNG format
-
-  fltr_1_2_qc_mtrcs_pca_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_fltr_1_2_qc_mtrcs_pca.pdf"
-    doc: |
-      PC1 and PC2 from the QC metrics PCA (filtered).
-      PDF format
+      QC metrics PCA.
+      Filtered; PC1/PC2.
+      PNG format.
 
   fltr_2_3_qc_mtrcs_pca_plot_png:
     type: File?
     outputBinding:
       glob: "*_fltr_2_3_qc_mtrcs_pca.png"
     doc: |
-      PC2 and PC3 from the QC metrics PCA (filtered).
-      PNG format
+      QC metrics PCA.
+      Filtered; PC2/PC3.
+      PNG format.
 
-  fltr_2_3_qc_mtrcs_pca_plot_pdf:
+  fltr_cell_cnts_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_2_3_qc_mtrcs_pca.pdf"
+      glob: "*_fltr_cell_cnts.png"
     doc: |
-      PC2 and PC3 from the QC metrics PCA (filtered).
-      PDF format
-
-  fltr_cells_count_plot_png:
-    type: File?
-    outputBinding:
-      glob: "*_fltr_cells_count.png"
-    doc: |
-      Number of cells per dataset (filtered).
-      PNG format
-
-  fltr_cells_count_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_fltr_cells_count.pdf"
-    doc: |
-      Number of cells per dataset (filtered).
-      PDF format
+      Number of cells per dataset.
+      Filtered.
+      PNG format.
 
   fltr_umi_dnst_plot_png:
     type: File?
     outputBinding:
       glob: "*_fltr_umi_dnst.png"
     doc: |
-      UMI per cell density (filtered).
-      PNG format
-
-  fltr_umi_dnst_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_fltr_umi_dnst.pdf"
-    doc: |
-      UMI per cell density (filtered).
-      PDF format
+      Distribution of RNA reads per cell.
+      Filtered.
+      PNG format.
 
   fltr_gene_dnst_plot_png:
     type: File?
     outputBinding:
       glob: "*_fltr_gene_dnst.png"
     doc: |
-      Genes per cell density (filtered).
-      PNG format
+      Distribution of genes per cell.
+      Filtered.
+      PNG format.
 
-  fltr_gene_dnst_plot_pdf:
+  fltr_gene_umi_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_gene_dnst.pdf"
+      glob: "*_fltr_gene_umi.png"
     doc: |
-      Genes per cell density (filtered).
-      PDF format
+      Genes vs RNA reads per cell.
+      Filtered.
+      PNG format.
 
-  fltr_gene_umi_corr_plot_png:
+  fltr_umi_mito_plot_png:
     type: File?
     outputBinding:
-      glob: "*_fltr_gene_umi_corr.png"
+      glob: "*_fltr_umi_mito.png"
     doc: |
-      Genes vs UMI per cell correlation (filtered).
-      PNG format
-
-  fltr_gene_umi_corr_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_fltr_gene_umi_corr.pdf"
-    doc: |
-      Genes vs UMI per cell correlation (filtered).
-      PDF format
+      RNA reads vs mitochondrial percentage
+      per cell.
+      Filtered.
+      PNG format.
 
   fltr_mito_dnst_plot_png:
     type: File?
     outputBinding:
       glob: "*_fltr_mito_dnst.png"
     doc: |
-      Percentage of transcripts mapped to mitochondrial genes per cell density (filtered).
-      PNG format
-
-  fltr_mito_dnst_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_fltr_mito_dnst.pdf"
-    doc: |
-      Percentage of transcripts mapped to mitochondrial genes per cell density (filtered).
-      PDF format
+      Distribution of RNA reads mapped
+      to mitochondrial genes per cell.
+      Filtered.
+      PNG format.
 
   fltr_nvlt_dnst_plot_png:
     type: File?
     outputBinding:
       glob: "*_fltr_nvlt_dnst.png"
     doc: |
-      Novelty score per cell density (filtered).
-      PNG format
-
-  fltr_nvlt_dnst_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_fltr_nvlt_dnst.pdf"
-    doc: |
-      Novelty score per cell density (filtered).
-      PDF format
+      Distribution of novelty score per cell.
+      Filtered.
+      PNG format.
 
   fltr_qc_mtrcs_dnst_plot_png:
     type: File?
     outputBinding:
       glob: "*_fltr_qc_mtrcs_dnst.png"
     doc: |
-      QC metrics per cell density (filtered).
-      PNG format
-
-  fltr_qc_mtrcs_dnst_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_fltr_qc_mtrcs_dnst.pdf"
-    doc: |
-      QC metrics per cell density (filtered).
-      PDF format
+      Distribution of QC metrics per cell.
+      Filtered.
+      PNG format.
 
   fltr_rnadbl_plot_png:
     type: File?
     outputBinding:
       glob: "*_fltr_rnadbl.png"
     doc: |
-      Percentage of RNA doublets per dataset (filtered).
-      PNG format
-
-  fltr_rnadbl_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_fltr_rnadbl.pdf"
-    doc: |
-      Percentage of RNA doublets per dataset (filtered).
-      PDF format
+      Percentage of RNA doublets.
+      Filtered.
+      PNG format.
 
   fltr_umi_dnst_spl_cnd_plot_png:
     type: File?
     outputBinding:
       glob: "*_fltr_umi_dnst_spl_cnd.png"
     doc: |
-      Split by grouping condition UMI per cell density (filtered).
-      PNG format
-
-  fltr_umi_dnst_spl_cnd_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_fltr_umi_dnst_spl_cnd.pdf"
-    doc: |
-      Split by grouping condition UMI per cell density (filtered).
-      PDF format
+      Distribution of RNA reads per cell.
+      Filtered; split by grouping condition.
+      PNG format.
 
   fltr_gene_dnst_spl_cnd_plot_png:
     type: File?
     outputBinding:
       glob: "*_fltr_gene_dnst_spl_cnd.png"
     doc: |
-      Split by grouping condition genes per cell density (filtered).
-      PNG format
-
-  fltr_gene_dnst_spl_cnd_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_fltr_gene_dnst_spl_cnd.pdf"
-    doc: |
-      Split by grouping condition genes per cell density (filtered).
-      PDF format
+      Distribution of genes per cell.
+      Filtered; split by grouping condition.
+      PNG format.
 
   fltr_mito_dnst_spl_cnd_plot_png:
     type: File?
     outputBinding:
       glob: "*_fltr_mito_dnst_spl_cnd.png"
     doc: |
-      Split by grouping condition the percentage of transcripts mapped
-      to mitochondrial genes per cell density (filtered).
-      PNG format
-
-  fltr_mito_dnst_spl_cnd_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_fltr_mito_dnst_spl_cnd.pdf"
-    doc: |
-      Split by grouping condition the percentage of transcripts mapped
-      to mitochondrial genes per cell density (filtered).
-      PDF format
+      Distribution of RNA reads mapped
+      to mitochondrial genes per cell.
+      Filtered; split by grouping condition.
+      PNG format.
 
   fltr_nvlt_dnst_spl_cnd_plot_png:
     type: File?
     outputBinding:
       glob: "*_fltr_nvlt_dnst_spl_cnd.png"
     doc: |
-      Split by grouping condition the novelty score per cell density (filtered).
-      PNG format
+      Distribution of novelty score per cell.
+      Filtered; split by grouping condition.
+      PNG format.
 
-  fltr_nvlt_dnst_spl_cnd_plot_pdf:
-    type: File?
+  all_plots_pdf:
+    type:
+    - "null"
+    - type: array
+      items: File
     outputBinding:
-      glob: "*_fltr_nvlt_dnst_spl_cnd.pdf"
+      glob: "*.pdf"
     doc: |
-      Split by grouping condition the novelty score per cell density (filtered).
-      PDF format
+      All generated plots.
+      PDF format.
 
   ucsc_cb_config_data:
     type: Directory?
     outputBinding:
       glob: "*_cellbrowser"
     doc: |
-      Directory with UCSC Cellbrowser configuration data.
+      UCSC Cell Browser configuration data.
 
   ucsc_cb_html_data:
     type: Directory?
     outputBinding:
       glob: "*_cellbrowser/html_data"
     doc: |
-      Directory with UCSC Cellbrowser html data.
+      UCSC Cell Browser html data.
 
   ucsc_cb_html_file:
     type: File?
     outputBinding:
       glob: "*_cellbrowser/html_data/index.html"
     doc: |
-      HTML index file from the directory with UCSC Cellbrowser html data.
+      UCSC Cell Browser html index.
 
   seurat_data_rds:
     type: File
     outputBinding:
       glob: "*_data.rds"
     doc: |
-      Filtered Seurat data in RDS format
+      Seurat object.
+      RDS format
+
+  datasets_metadata:
+    type: File
+    outputBinding:
+      glob: "*_meta.tsv"
+    doc: |
+      Example of datasets metadata file
+      in TSV format
 
   seurat_data_h5seurat:
     type: File?
     outputBinding:
       glob: "*_data.h5seurat"
     doc: |
-      Filtered Seurat data in h5seurat format
+      Seurat object.
+      h5Seurat format
 
   seurat_data_h5ad:
     type: File?
     outputBinding:
-      glob: "*_data.h5ad"
+      glob: "*_counts.h5ad"
     doc: |
-      Reduced Seurat data in h5ad format
+      Seurat object.
+      H5AD format
+
+  seurat_data_cloupe:
+    type: File?
+    outputBinding:
+      glob: "*_counts.cloupe"
+    doc: |
+      Seurat object.
+      Loupe format
+
+  sc_report_html_file:
+    type: File?
+    outputBinding:
+      glob: "sc_report.html"
+    doc: |
+      Tehcnical report.
+      HTML format.
 
   stdout_log:
     type: stdout
@@ -762,18 +655,9 @@ outputs:
     type: stderr
 
 
-baseCommand: ["sc_rna_filter.R"]
+baseCommand: ["Rscript"]
 arguments:
-- valueFrom: |
-    ${
-      if (inputs.aggregation_metadata) {
-        return inputs.aggregation_metadata;
-      } else {
-        return runtime.outdir + "/dummy_metadata.csv"
-      }
-    }
-  prefix: "--identity"
-
+- valueFrom: $(inputs.export_html_report?["/usr/local/bin/sc_report_wrapper.R", "/usr/local/bin/sc_rna_filter.R"]:"/usr/local/bin/sc_rna_filter.R")
 
 stdout: sc_rna_filter_stdout.log
 stderr: sc_rna_filter_stderr.log
@@ -786,9 +670,9 @@ $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
 
-label: "Single-cell RNA-Seq Filtering Analysis"
-s:name: "Single-cell RNA-Seq Filtering Analysis"
-s:alternateName: "Filters single-cell RNA-Seq datasets based on the common QC metrics"
+label: "Single-Cell RNA-Seq Filtering Analysis"
+s:name: "Single-Cell RNA-Seq Filtering Analysis"
+s:alternateName: "Single-Cell RNA-Seq Filtering Analysis"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/sc-rna-filter.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows
@@ -826,26 +710,36 @@ s:creator:
 
 
 doc: |
-  Single-cell RNA-Seq Filtering Analysis
+  Single-Cell RNA-Seq Filtering Analysis
 
-  Filters single-cell RNA-Seq datasets based on the common QC metrics.
+  Removes low-quality cells from the outputs of the “Cell
+  Ranger Count (RNA)”, “Cell Ranger Count (RNA+VDJ)”, and
+  “Cell Ranger Aggregate (RNA, RNA+VDJ)” pipelines. The
+  results of this workflow are used in the “Single-Cell
+  RNA-Seq Dimensionality Reduction Analysis” pipeline.
 
 
 s:about: |
-  usage: sc_rna_filter.R
-        [-h] --mex MEX [MEX ...] --identity IDENTITY [--grouping GROUPING]
-        [--barcodes BARCODES] [--rnamincells RNAMINCELLS]
-        [--mingenes [MINGENES [MINGENES ...]]]
-        [--maxgenes [MAXGENES [MAXGENES ...]]]
-        [--rnaminumi [RNAMINUMI [RNAMINUMI ...]]]
-        [--minnovelty [MINNOVELTY [MINNOVELTY ...]]]
-        [--mitopattern MITOPATTERN] [--maxmt MAXMT] [--removedoublets]
-        [--rnadbr RNADBR] [--rnadbrsd RNADBRSD] [--pdf] [--verbose]
-        [--h5seurat] [--h5ad] [--cbbuild] [--output OUTPUT]
-        [--theme {gray,bw,linedraw,light,dark,minimal,classic,void}]
-        [--cpus CPUS] [--memory MEMORY]
+  usage: sc_rna_filter.R [-h] --mex MEX [MEX ...]
+                                        [--identity IDENTITY]
+                                        [--grouping GROUPING]
+                                        [--barcodes BARCODES]
+                                        [--rnamincells RNAMINCELLS]
+                                        [--mingenes [MINGENES [MINGENES ...]]]
+                                        [--maxgenes [MAXGENES [MAXGENES ...]]]
+                                        [--minumis [MINUMIS [MINUMIS ...]]]
+                                        [--minnovelty [MINNOVELTY [MINNOVELTY ...]]]
+                                        [--mitopattern MITOPATTERN]
+                                        [--maxmt MAXMT] [--removedoublets]
+                                        [--rnadbr RNADBR] [--rnadbrsd RNADBRSD]
+                                        [--pdf] [--verbose] [--h5seurat]
+                                        [--h5ad] [--loupe] [--cbbuild]
+                                        [--output OUTPUT]
+                                        [--theme {gray,bw,linedraw,light,dark,minimal,classic,void}]
+                                        [--cpus CPUS] [--memory MEMORY]
+                                        [--seed SEED]
 
-  Single-cell RNA-Seq Filtering Analysis
+  Single-Cell RNA-Seq Filtering Analysis
 
   optional arguments:
     -h, --help            show this help message and exit
@@ -856,10 +750,9 @@ s:about: |
                           Count experiments) and will be merged before the
                           analysis.
     --identity IDENTITY   Path to the metadata TSV/CSV file to set the datasets
-                          identities. If '--mex' points to the Cell Ranger
-                          Aggregate outputs, the aggregation.csv file can be
-                          used. In case of using feature-barcode matrices from a
-                          single or multiple Cell Ranger Count experiments the
+                          identities, if '--mex' points to the Cell Ranger
+                          Aggregate outputs. The aggregation.csv file can be
+                          used. In case of using feature-barcode matrices the
                           file with identities should include at least one
                           column - 'library_id', and a row with aliases per each
                           experiment from the '--mex' input. The order of rows
@@ -886,21 +779,26 @@ s:about: |
                           Include cells where at least this many genes are
                           detected. If multiple values provided, each of them
                           will be applied to the correspondent dataset from the
-                          '--mex' input based on the '--identity' file. Default:
+                          '--mex' input based on the '--identity' file. Any 0
+                          will be replaced with the auto-estimated threshold
+                          (median - 2.5 * MAD) calculated per dataset. Default:
                           250 (applied to all datasets)
     --maxgenes [MAXGENES [MAXGENES ...]]
                           Include cells with the number of genes not bigger than
                           this value. If multiple values provided, each of them
                           will be applied to the correspondent dataset from the
-                          '--mex' input based on the '--identity' file. Default:
+                          '--mex' input based on the '--identity' file. Any 0
+                          will be replaced with the auto-estimated threshold
+                          (median + 5 * MAD) calculated per dataset. Default:
                           5000 (applied to all datasets)
-    --rnaminumi [RNAMINUMI [RNAMINUMI ...]]
-                          Include cells where at least this many UMI
-                          (transcripts) are detected. If multiple values
-                          provided, each of them will be applied to the
-                          correspondent dataset from the '--mex' input based on
-                          the '--identity' file. Default: 500 (applied to all
-                          datasets)
+    --minumis [MINUMIS [MINUMIS ...]]
+                          Include cells where at least this many RNA reads are
+                          detected. If multiple values provided, each of them
+                          will be applied to the correspondent dataset from the
+                          '--mex' input based on the '--identity' file. Any 0
+                          will be replaced with the auto-estimated threshold
+                          (median - 2.5 * MAD) calculated per dataset. Default:
+                          500 (applied to all datasets)
     --minnovelty [MINNOVELTY [MINNOVELTY ...]]
                           Include cells with the novelty score not lower than
                           this value, calculated for as log10(genes)/log10(UMI).
@@ -911,9 +809,11 @@ s:about: |
     --mitopattern MITOPATTERN
                           Regex pattern to identify mitochondrial genes.
                           Default: '^mt-|^MT-'
-    --maxmt MAXMT         Include cells with the percentage of transcripts
-                          mapped to mitochondrial genes not bigger than this
-                          value. Default: 5 (applied to all datasets)
+    --maxmt MAXMT         Include cells with the percentage of RNA reads mapped
+                          to mitochondrial genes not bigger than this value. Set
+                          to 0 for using an auto-estimated threshold equal to
+                          the maximum among (median + 2 * MAD) values calculated
+                          per dataset. Default: 5 (applied to all datasets)
     --removedoublets      Remove cells that were identified as doublets. Cells
                           with RNA UMI < 200 will not be evaluated. Default: do
                           not remove doublets
@@ -927,7 +827,12 @@ s:about: |
     --pdf                 Export plots in PDF. Default: false
     --verbose             Print debug information. Default: false
     --h5seurat            Save Seurat data to h5seurat file. Default: false
-    --h5ad                Save Seurat data to h5ad file. Default: false
+    --h5ad                Save raw counts from the RNA assay to h5ad file.
+                          Default: false
+    --loupe               Save raw counts from the RNA assay to Loupe file. By
+                          enabling this feature you accept the End-User License
+                          Agreement available at https://10xgen.com/EULA.
+                          Default: false
     --cbbuild             Export results to UCSC Cell Browser. Default: false
     --output OUTPUT       Output prefix. Default: ./sc
     --theme {gray,bw,linedraw,light,dark,minimal,classic,void}
@@ -935,3 +840,4 @@ s:about: |
     --cpus CPUS           Number of cores/cpus to use. Default: 1
     --memory MEMORY       Maximum memory in GB allowed to be shared between the
                           workers when using multiple '--cpus'. Default: 32
+    --seed SEED           Seed number for random values. Default: 42

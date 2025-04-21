@@ -15,13 +15,21 @@ requirements:
           let splitted_line = line?line.split(/[\s,]+/).filter(get_unique):null;
           return (splitted_line && !!splitted_line.length)?splitted_line:null;
       };
+    - var split_by_comma = function(line) {
+          function get_unique(value, index, self) {
+            return self.indexOf(value) === index && value != "";
+          }
+          var splitted_line = line?line.split(/,+/).filter(get_unique):null;
+          return (splitted_line && !!splitted_line.length)?splitted_line:null;
+      };
 
 
-'sd:upstream':
+"sd:upstream":
   sc_tools_sample:
   - "sc-atac-cluster.cwl"
   - "sc-wnn-cluster.cwl"
   - "sc-ctype-assign.cwl"
+  - "sc-rna-azimuth.cwl"
   sc_atac_sample:
   - "cellranger-arc-count.cwl"
   - "cellranger-arc-aggr.cwl"
@@ -48,29 +56,32 @@ inputs:
       information stored in the ATAC assay. Additionally
       'rnaumap', and/or 'atacumap', and/or 'wnnumap'
       dimensionality reductions should be present.
-    'sd:upstreamSource': "sc_tools_sample/seurat_data_rds"
-    'sd:localLabel': true
+    "sd:upstreamSource": "sc_tools_sample/seurat_data_rds"
+    "sd:localLabel": true
 
   atac_fragments_file:
     type: File
     secondaryFiles:
     - .tbi
-    label: "Cell Ranger ATAC/ARC Count/Aggregate Experiment"
+    label: "Cell Ranger ATAC or RNA+ATAC Sample"
     doc: |
-      Count and barcode information for every ATAC fragment
-      used in the loaded Seurat object. File should be saved
-      in TSV format with tbi-index file.
-      tbi-indexed.
-    'sd:upstreamSource': "sc_atac_sample/atac_fragments_file"
-    'sd:localLabel': true
+      Any "Cell Ranger ATAC or RNA+ATAC Sample"
+      for loading chromatin accessibility data
+      from. This sample can be obtained from
+      one of the following pipelines: "Cell
+      Ranger Count (RNA+ATAC)", "Cell Ranger
+      Aggregate (RNA+ATAC)", "Cell Ranger Count
+      (ATAC)", or "Cell Ranger Aggregate (ATAC)".
+    "sd:upstreamSource": "sc_atac_sample/atac_fragments_file"
+    "sd:localLabel": true
 
   genome_type:
     type: string
     label: "Genome"
     doc: |
       Reference genome
-    'sd:upstreamSource': "genome_indices/genome"
-    'sd:localLabel': true
+    "sd:upstreamSource": "genome_indices/genome"
+    "sd:localLabel": true
 
   datasets_metadata:
     type: File?
@@ -172,7 +183,7 @@ inputs:
     label: "Maximum adjusted P-value to show in IGV"
     doc: |
       In the exploratory visualization part of the analysis
-      output only differentially bound peaks with adjusted
+      output only differentially accessible regions with adjusted
       P-value not bigger than this value. Default: 0.05
 
   minimum_logfc:
@@ -181,7 +192,7 @@ inputs:
     label: "Maximum log2 Fold Change value to show in IGV"
     doc: |
       In the exploratory visualization part of the analysis
-      output only differentially bound peaks with log2 Fold
+      output only differentially accessible regions with log2 Fold
       Change not smaller than this value. Default: 1.0
 
   blacklist_regions_file:
@@ -202,7 +213,7 @@ inputs:
     doc: |
       Minimum FDR (q-value) cutoff for MACS2 peak detection.
       Ignored if --test is not set to manorm2. Default: 0.05
-    'sd:layout':
+    "sd:layout":
       advanced: true
 
   minimum_peak_gap:
@@ -214,7 +225,7 @@ inputs:
       provided value they will be merged before splitting
       them into reference genomic bins of size --binsize.
       Ignored if --test is not set to manorm2. Default: 150
-    'sd:layout':
+    "sd:layout":
       advanced: true
 
   bin_size:
@@ -226,7 +237,7 @@ inputs:
       used by MAnorm2 when generating a table of reads
       counts per peaks. Ignored if --test is not set to
       manorm2. Default: 1000
-    'sd:layout':
+    "sd:layout":
       advanced: true
 
   maximum_peaks:
@@ -238,36 +249,17 @@ inputs:
       qvalue) peaks to keep from each group of cells when
       constructing reference genomic bins. Ignored if --test
       is not set to manorm2. Default: keep all peaks
-    'sd:layout':
+    "sd:layout":
       advanced: true
 
-  parallel_memory_limit:
-    type:
-    - "null"
-    - type: enum
-      symbols:
-      - "32"
-    default: "32"
-    label: "Maximum memory in GB allowed to be shared between the workers when using multiple CPUs"
+  export_html_report:
+    type: boolean?
+    default: true
+    label: "Show HTML report"
     doc: |
-      Maximum memory in GB allowed to be shared between the workers
-      when using multiple --cpus.
-      Forced to 32 GB
-    'sd:layout':
-      advanced: true
-
-  vector_memory_limit:
-    type:
-    - "null"
-    - type: enum
-      symbols:
-      - "64"
-    default: "64"
-    label: "Maximum vector memory in GB allowed to be used by R"
-    doc: |
-      Maximum vector memory in GB allowed to be used by R.
-      Forced to 64 GB
-    'sd:layout':
+      Export tehcnical report in HTML format.
+      Default: true
+    "sd:layout":
       advanced: true
 
   threads:
@@ -276,12 +268,19 @@ inputs:
     - type: enum
       symbols:
       - "1"
-    default: "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+      - "6"
+    default: "4"
     label: "Number of cores/cpus to use"
     doc: |
-      Number of cores/cpus to use
-      Forced to 1
-    'sd:layout':
+      Parallelization parameter to define the
+      number of cores/CPUs that can be utilized
+      simultaneously.
+      Default: 4
+    "sd:layout":
       advanced: true
 
 
@@ -296,10 +295,10 @@ outputs:
       optionally subsetted to the specific
       group (rnaumap dim. reduction).
       PNG format
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - image:
-        tab: 'Overall'
-        Caption: 'Cells RNA UMAP split by selected criteria'
+        tab: "Overall"
+        Caption: "Cells RNA UMAP split by selected criteria"
 
   umap_rd_atacumap_plot_png:
     type: File?
@@ -310,10 +309,10 @@ outputs:
       optionally subsetted to the specific
       group (atacumap dim. reduction).
       PNG format
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - image:
-        tab: 'Overall'
-        Caption: 'Cells ATAC UMAP split by selected criteria'
+        tab: "Overall"
+        Caption: "Cells ATAC UMAP split by selected criteria"
 
   umap_rd_wnnumap_plot_png:
     type: File?
@@ -324,22 +323,22 @@ outputs:
       optionally subsetted to the specific
       group (atacumap dim. reduction).
       PNG format
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - image:
-        tab: 'Overall'
-        Caption: 'Cells WNN UMAP split by selected criteria'
+        tab: "Overall"
+        Caption: "Cells WNN UMAP split by selected criteria"
 
   dbnd_vlcn_plot_png:
     type: File?
     outputSource: sc_atac_dbinding/dbnd_vlcn_plot_png
-    label: "Volcano plot of differentially bound sites"
+    label: "Volcano plot of differentially accessible regions"
     doc: |
-      Volcano plot of differentially bound sites.
+      Volcano plot of differentially accessible regions.
       PNG format
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - image:
-        tab: 'Overall'
-        Caption: 'Volcano plot of differentially bound sites'
+        tab: "Overall"
+        Caption: "Volcano plot of differentially accessible regions"
 
   seurat_peaks_bigbed_file:
     type: File
@@ -349,47 +348,47 @@ outputs:
       Peaks in bigBed format extracted
       from the loaded from provided RDS
       file Seurat object. 
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'Genome Browser'
-        id: 'igvbrowser'
-        type: 'annotation'
-        format: 'bigbed'
+        tab: "Genome Browser"
+        id: "igvbrowser"
+        type: "annotation"
+        format: "bigbed"
         name: "Seurat peaks"
         height: 40
 
   first_fragments_bigwig_file:
     type: File
     outputSource: sc_atac_dbinding/first_fragments_bigwig_file
-    label: "Genome coverage for fragments (first)"
+    label: "Genome coverage for ATAC fragments (first)"
     doc: |
       Genome coverage in bigWig format calculated
-      for fragments from the cells that belong to
+      for ATAC fragments from the cells that belong to
       the group defined by the --first and
       --groupby parameters.
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'Genome Browser'
-        id: 'igvbrowser'
-        type: 'wig'
-        name: "Fragments coverage (first)"
+        tab: "Genome Browser"
+        id: "igvbrowser"
+        type: "wig"
+        name: "ATAC fragments coverage (first)"
         height: 120
 
   second_fragments_bigwig_file:
     type: File
     outputSource: sc_atac_dbinding/second_fragments_bigwig_file
-    label: "Genome coverage for fragments (second)"
+    label: "Genome coverage for ATAC fragments (second)"
     doc: |
       Genome coverage in bigWig format calculated
-      for fragments from the cells that belong to
+      for ATAC fragments from the cells that belong to
       the group defined by the --second and
       --groupby parameters.
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'Genome Browser'
-        id: 'igvbrowser'
-        type: 'wig'
-        name: "Fragments coverage (second)"
+        tab: "Genome Browser"
+        id: "igvbrowser"
+        type: "wig"
+        name: "ATAC fragments coverage (second)"
         height: 120
 
   first_tn5ct_bigwig_file:
@@ -401,11 +400,11 @@ outputs:
       for Tn5 cut sites from the cells that belong
       to the group defined by the --first and
       --groupby parameters.
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'Genome Browser'
-        id: 'igvbrowser'
-        type: 'wig'
+        tab: "Genome Browser"
+        id: "igvbrowser"
+        type: "wig"
         name: "Tn5 coverage (first)"
         height: 120
 
@@ -418,11 +417,11 @@ outputs:
       for Tn5 cut sites from the cells that belong
       to the group defined by the --second and
       --groupby parameters.
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'Genome Browser'
-        id: 'igvbrowser'
-        type: 'wig'
+        tab: "Genome Browser"
+        id: "igvbrowser"
+        type: "wig"
         name: "Tn5 coverage (second)"
         height: 120
 
@@ -455,11 +454,11 @@ outputs:
       from the Tn5 cut sites of the cells that
       belong to the group defined by the --first
       and --groupby parameters.
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'Genome Browser'
-        id: 'igvbrowser'
-        type: 'annotation'
+        tab: "Genome Browser"
+        id: "igvbrowser"
+        type: "annotation"
         name: "Called peaks (first)"
         displayMode: "COLLAPSE"
         height: 40
@@ -473,11 +472,11 @@ outputs:
       from the Tn5 cut sites of the cells that
       belong to the group defined by the --second
       and --groupby parameters.
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'Genome Browser'
-        id: 'igvbrowser'
-        type: 'annotation'
+        tab: "Genome Browser"
+        id: "igvbrowser"
+        type: "annotation"
         name: "Called peaks (second)"
         displayMode: "COLLAPSE"
         height: 40
@@ -505,63 +504,69 @@ outputs:
   diff_bound_sites:
     type: File
     outputSource: sc_atac_dbinding/diff_bound_sites
-    label: "Differentially bound sites"
+    label: "Differentially accessible regions"
     doc: |
-      Not filtered differentially bound sites
+      Not filtered differentially accessible regions
       in TSV format
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - syncfusiongrid:
-        tab: 'Diff bound sites'
-        Title: 'Differentially bound sites. Not filtered'
+        tab: "Diff. accessible regions"
+        Title: "Differentially accessible regions. Not filtered"
 
   diff_bound_sites_with_labels:
     type: File
     outputSource: add_label_column/output_file
-    label: "Differentially bound sites with labels"
+    label: "Differentially accessible regions with labels"
     doc: |
-      Not filtered differentially bound sites
+      Not filtered differentially accessible regions
       with labels in TSV format
+    'sd:visualPlugins':
+    - queryRedirect:
+        tab: "Overview"
+        label: "Volcano Plot"
+        url: "https://scidap.com/vp/volcano"
+        query_eval_string: "`data_file=${this.getSampleValue('outputs', 'diff_bound_sites_with_labels')}&data_col=label&x_col=log2FoldChange&y_col=padj`"
 
   first_enrch_bigbed_file:
     type: File?
     outputSource: sc_atac_dbinding/first_enrch_bigbed_file
-    label: "Significant differentially bound sites (first)"
+    label: "Significant differentially accessible regions (first)"
     doc: |
       Peaks in bigBed format filtered by
       --padj and --logfc thresholds enriched
       in the group of cells defined by the
       --first and --groupby parameters.
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'Genome Browser'
-        id: 'igvbrowser'
-        type: 'annotation'
-        format: 'bigbed'
-        name: "Diff. bound sites (first)"
+        tab: "Genome Browser"
+        id: "igvbrowser"
+        type: "annotation"
+        format: "bigbed"
+        name: "Diff. accessible regions (first)"
         height: 40
 
   second_enrch_bigbed_file:
     type: File?
     outputSource: sc_atac_dbinding/second_enrch_bigbed_file
-    label: "Significant differentially bound sites (second)"
+    label: "Significant differentially accessible regions (second)"
     doc: |
       Peaks in bigBed format filtered by
       --padj and --logfc thresholds enriched
       in the group of cells defined by the
       --second and --groupby parameters.
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'Genome Browser'
-        id: 'igvbrowser'
-        type: 'annotation'
-        format: 'bigbed'
-        name: "Diff. bound sites (second)"
+        tab: "Genome Browser"
+        id: "igvbrowser"
+        type: "annotation"
+        format: "bigbed"
+        name: "Diff. accessible regions (second)"
         height: 40
 
   first_enrch_bed_file:
     type: File?
     outputSource: sc_atac_dbinding/first_enrch_bed_file
-    label: "Significant differentially bound sites (first)"
+    label: "Significant differentially accessible regions (first)"
     doc: |
       Peaks in BED format filtered by
       --padj and --logfc thresholds enriched
@@ -571,30 +576,12 @@ outputs:
   second_enrch_bed_file:
     type: File?
     outputSource: sc_atac_dbinding/second_enrch_bed_file
-    label: "Significant differentially bound sites (second)"
+    label: "Significant differentially accessible regions (second)"
     doc: |
       Peaks in BED format filtered by
       --padj and --logfc thresholds enriched
       in the group of cells defined by the
       --second and --groupby parameters.
-
-  volcano_plot_html_file:
-    type: File
-    outputSource: make_volcano_plot/html_file
-    label: "Volcano Plot"
-    doc: |
-      HTML index file for Volcano Plot
-    'sd:visualPlugins':
-    - linkList:
-        tab: 'Overview'
-        target: "_blank"
-
-  volcano_plot_html_data:
-    type: Directory
-    outputSource: make_volcano_plot/html_data
-    label: "Directory html data for Volcano Plot"
-    doc: |
-      Directory html data for Volcano Plot
 
   tag_density_matrix:
     type: File
@@ -612,26 +599,45 @@ outputs:
     label: "Tag density heatmap"
     doc: |
       Tag density heatmap around centers
-      of differentially bound sites in
+      of differentially accessible regions in
       PNG format
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - image:
-        tab: 'Overall'
-        Caption: 'Tag density heatmap around centers of diff. bound sites'
+        tab: "Overall"
+        Caption: "Tag density heatmap around centers of diff. accessible regions"
+
+  pdf_plots:
+    type: File
+    outputSource: compress_pdf_plots/compressed_folder
+    label: "Compressed folder with all PDF plots"
+    doc: |
+      Compressed folder with all PDF plots.
+
+  sc_report_html_file:
+    type: File?
+    outputSource: sc_atac_dbinding/sc_report_html_file
+    label: "Analysis log"
+    doc: |
+      Tehcnical report.
+      HTML format.
+    "sd:visualPlugins":
+    - linkList:
+        tab: "Overview"
+        target: "_blank"
 
   sc_atac_dbinding_stdout_log:
     type: File
     outputSource: sc_atac_dbinding/stdout_log
-    label: "stdout log generated by sc_atac_dbinding step"
+    label: "Output log"
     doc: |
-      stdout log generated by sc_atac_dbinding step
+      Stdout log from the sc_atac_dbinding step.
 
   sc_atac_dbinding_stderr_log:
     type: File
     outputSource: sc_atac_dbinding/stderr_log
-    label: "stderr log generated by sc_atac_dbinding step"
+    label: "Error log"
     doc: |
-      stderr log generated by sc_atac_dbinding step
+      Stderr log from the sc_atac_dbinding step.
 
 
 steps:
@@ -648,7 +654,7 @@ steps:
         valueFrom: $(self==""?null:self)                # safety measure
       subset:
         source: subset
-        valueFrom: $(split_features(self))
+        valueFrom: $(split_by_comma(self))
       splitby: splitby
       first_cond: first_cond
       second_cond: second_cond
@@ -667,12 +673,13 @@ steps:
       minimum_logfc: minimum_logfc
       verbose:
         default: true
+      export_pdf_plots:
+        default: true
       parallel_memory_limit:
-        source: parallel_memory_limit
-        valueFrom: $(parseInt(self))
+        default: 32
       vector_memory_limit:
-        source: vector_memory_limit
-        valueFrom: $(parseInt(self))
+        default: 128
+      export_html_report: export_html_report
       threads:
         source: threads
         valueFrom: $(parseInt(self))
@@ -697,8 +704,35 @@ steps:
     - second_enrch_bigbed_file
     - first_enrch_bed_file
     - second_enrch_bed_file
+    - umap_rd_rnaumap_plot_pdf
+    - umap_rd_atacumap_plot_pdf
+    - umap_rd_wnnumap_plot_pdf
+    - dbnd_vlcn_plot_pdf
+    - sc_report_html_file
     - stdout_log
     - stderr_log
+
+  folder_pdf_plots:
+    run: ../tools/files-to-folder.cwl
+    in:
+      input_files:
+        source:
+        - sc_atac_dbinding/umap_rd_rnaumap_plot_pdf
+        - sc_atac_dbinding/umap_rd_atacumap_plot_pdf
+        - sc_atac_dbinding/umap_rd_wnnumap_plot_pdf
+        - sc_atac_dbinding/dbnd_vlcn_plot_pdf
+        valueFrom: $(self.flat().filter(n => n))
+      folder_basename:
+        default: "pdf_plots"
+    out:
+    - folder
+
+  compress_pdf_plots:
+    run: ../tools/tar-compress.cwl
+    in:
+      folder_to_compress: folder_pdf_plots/folder
+    out:
+    - compressed_folder
 
   add_label_column:
     run: ../tools/custom-bash.cwl
@@ -711,20 +745,6 @@ steps:
           cat "$0" | grep -v "start" | awk -F "\t" '{print $1":"$2"-"$3"-"$NF"\t"$0}' >> diff_sts_labeled.tsv
     out:
     - output_file
-
-  make_volcano_plot:
-    run: ../tools/volcano-plot.cwl
-    in:
-      diff_expr_file: add_label_column/output_file
-      x_axis_column:
-        default: "log2FoldChange"
-      y_axis_column:
-        default: "padj"
-      label_column:
-        default: "label"
-    out:
-    - html_data
-    - html_file
 
   recenter_first_enrch_bed:
     run:
@@ -906,9 +926,9 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-label: "Single-cell ATAC-Seq Differential Binding Analysis"
-s:name: "Single-cell ATAC-Seq Differential Binding Analysis"
-s:alternateName: "Identifies differential bound sites between two groups of cells"
+label: "Single-Cell ATAC-Seq Differential Accessibility Analysis"
+s:name: "Single-Cell ATAC-Seq Differential Accessibility Analysis"
+s:alternateName: "Identifies differentially accessible regions between two groups of cells"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows-datirium/master/workflows/sc-atac-dbinding.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows-datirium
@@ -946,7 +966,8 @@ s:creator:
 
 
 doc: |
-  Single-cell ATAC-Seq Differential Binding Analysis
+  Single-Cell ATAC-Seq Differential Accessibility Analysis
 
-  Identifies differential bound sites between two
-  groups of cells
+  Identifies differentially accessible regions between any
+  two groups of cells, optionally aggregating chromatin
+  accessibility data from single-cell to pseudobulk form.

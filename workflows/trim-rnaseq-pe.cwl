@@ -45,9 +45,7 @@ inputs:
   annotation_file:
     type: File
     label: "Annotation file"
-    format:
-      - "http://edamontology.org/format_2306"
-      - "http://edamontology.org/format_3475"
+    format: "http://edamontology.org/format_3475"
     'sd:upstreamSource': "genome_indices/annotation"
     doc: "GTF or TAB-separated annotation file"
 
@@ -95,6 +93,19 @@ inputs:
     label: "Clip from 5p end"
     doc: "Number of bases to clip from the 5p end"
 
+  minimum_length:
+    type: int?
+    default: 30
+    label: "Mimimum allowed read length after adapter trimming"
+    doc: |
+      Discard reads that became shorter than the
+      specified length because of either quality
+      or adapter trimming. A value of 0 effectively
+      disables this behaviour.
+      Default: 30
+    'sd:layout':
+      advanced: true
+
   minimum_rpkm:
     type: float?
     default: 1
@@ -119,6 +130,14 @@ inputs:
     'sd:layout':
       advanced: true
 
+  max_mismatch:
+    type: int?
+    default: 5
+    label: "Maximum number of mismatches the read is allowed to have"
+    doc: "Maximum number of mismatches the read is allowed to have"
+    'sd:layout':
+      advanced: true
+
 # System dependent
 
   threads:
@@ -130,15 +149,6 @@ inputs:
     doc: "Number of threads for those steps that support multithreading"
 
 outputs:
-
-  unaligned_fastq:
-    type:
-      - "null"
-      - File[]
-    format: "http://edamontology.org/format_1930"
-    label: "Unaligned FASTQ file(s)"
-    doc: "Unaligned FASTQ file(s)"
-    outputSource: bowtie_aligner/unaligned_fastq
 
   bigwig:
     type: File
@@ -188,6 +198,18 @@ outputs:
     label: "STAR sj log"
     doc: "STAR SJ.out.tab"
     outputSource: star_aligner/log_sj
+
+  unmapped_fastq_r1:
+    type: File
+    label: "Unmapped reads from FASTQ read 1 input file(s)"
+    doc: "Unmapped reads from FASTQ read 1 input file(s)"
+    outputSource: compress_unmapped_mate_1_file/output_file
+
+  unmapped_fastq_r2:
+    type: File
+    label: "Unmapped reads from FASTQ read 2 input file(s)"
+    doc: "Unmapped reads from FASTQ read 2 input file(s)"
+    outputSource: compress_unmapped_mate_2_file/output_file
 
   fastx_statistics_upstream:
     type: File
@@ -427,8 +449,7 @@ steps:
       input_file_pair: extract_fastq_downstream/fastq_file
       dont_gzip:
         default: true
-      length:
-        default: 30
+      length: minimum_length
       trim1:
         default: true
       paired:
@@ -483,23 +504,40 @@ steps:
       genomeDir: star_indices_folder
       outFilterMultimapNmax: max_multimap
       winAnchorMultimapNmax: max_multimap_anchor
-      outFilterMismatchNmax:
-        default: 5
+      outFilterMismatchNmax: max_mismatch
       alignSJDBoverhangMin:
         default: 1
       seedSearchStartLmax:
         default: 15
       clip3pNbases: clip_3p_end
       clip5pNbases: clip_5p_end
+      outReadsUnmapped:
+        default: "Fastx"
       threads: threads
     out:
       - aligned_file
+      - unmapped_mate_1_file
+      - unmapped_mate_2_file
       - log_final
       - uniquely_mapped_reads_number
       - log_out
       - log_progress
       - log_std
       - log_sj
+
+  compress_unmapped_mate_1_file:
+    run: ../tools/bzip2-compress.cwl
+    in:
+      input_file: star_aligner/unmapped_mate_1_file
+    out:
+    - output_file
+
+  compress_unmapped_mate_2_file:
+    run: ../tools/bzip2-compress.cwl
+    in:
+      input_file: star_aligner/unmapped_mate_2_file
+    out:
+    - output_file
 
   fastx_quality_stats_upstream:
     run: ../tools/fastx-quality-stats.cwl
@@ -550,7 +588,7 @@ steps:
       sam:
         default: true
       threads: threads
-    out: [log_file, unaligned_fastq]
+    out: [log_file]
 
   rpkm_calculation:
     run: ../tools/geep.cwl
@@ -692,11 +730,11 @@ doc: |
   **RNA-Seq** basic analysis for a **pair-end** experiment.
   A corresponded input [FASTQ](http://maq.sourceforge.net/fastq.shtml) file has to be provided.
 
-  Current workflow should be used only with the single-end RNA-Seq data. It performs the following steps:
+  Current workflow must be used with paired-end RNA-Seq data. It performs the following steps:
   1. Trim adapters from input FASTQ files
   2. Use STAR to align reads from input FASTQ files according to the predefined reference indices; generate unsorted BAM file and alignment statistics file
   3. Use fastx_quality_stats to analyze input FASTQ files and generate quality statistics files
-  4. Use samtools sort to generate coordinate sorted BAM(+BAI) file pair from the unsorted BAM file obtained on the step 1 (after running STAR)
-  5. Generate BigWig file on the base of sorted BAM file
+  4. Use samtools sort to generate coordinate sorted BAM(+BAI) file pair from the unsorted BAM file obtained on the step 2 (after running STAR)
+  5. Generate BigWig file using sorted BAM file
   6. Map input FASTQ files to predefined rRNA reference indices using Bowtie to define the level of rRNA contamination; export resulted statistics to file
   7. Calculate isoform expression level for the sorted BAM file and GTF/TAB annotation file using GEEP reads-counting utility; export results to file

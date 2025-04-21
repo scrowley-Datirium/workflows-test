@@ -11,7 +11,7 @@ requirements:
 
 hints:
 - class: DockerRequirement
-  dockerPull: biowardrobe2/sc-tools:v0.0.21
+  dockerPull: biowardrobe2/sc-tools:v0.0.41
 
 
 inputs:
@@ -103,7 +103,17 @@ inputs:
     inputBinding:
       prefix: "--h5ad"
     doc: |
-      Save Seurat data to h5ad file.
+      Save raw counts from the RNA and/or ATAC assay(s) to h5ad file(s).
+      Default: false
+
+  export_loupe_data:
+    type: boolean?
+    inputBinding:
+      prefix: "--loupe"
+    doc: |
+      Save raw counts from the RNA assay to Loupe file. By
+      enabling this feature you accept the End-User License
+      Agreement available at https://10xgen.com/EULA.
       Default: false
 
   export_ucsc_cb:
@@ -112,6 +122,14 @@ inputs:
       prefix: "--cbbuild"
     doc: |
       Export results to UCSC Cell Browser. Default: false
+
+  export_html_report:
+    type: boolean?
+    default: false
+    doc: |
+      Export tehcnical report. HTML format.
+      Note, stdout will be less informative.
+      Default: false
 
   output_prefix:
     type: string?
@@ -144,6 +162,14 @@ inputs:
     doc: |
       Number of cores/cpus to use.
       Default: 1
+
+  seed:
+    type: int?
+    inputBinding:
+      prefix: "--seed"
+    doc: |
+      Seed number for random values.
+      Default: 42
 
 
 outputs:
@@ -297,42 +323,72 @@ outputs:
     outputBinding:
       glob: "*_cellbrowser"
     doc: |
-      Directory with UCSC Cellbrowser configuration data.
+      UCSC Cell Browser configuration data.
 
   ucsc_cb_html_data:
     type: Directory?
     outputBinding:
       glob: "*_cellbrowser/html_data"
     doc: |
-      Directory with UCSC Cellbrowser html data.
+      UCSC Cell Browser html data.
 
   ucsc_cb_html_file:
     type: File?
     outputBinding:
       glob: "*_cellbrowser/html_data/index.html"
     doc: |
-      HTML index file from the directory with UCSC Cellbrowser html data.
+      UCSC Cell Browser html index.
 
   seurat_data_rds:
     type: File
     outputBinding:
       glob: "*_data.rds"
     doc: |
-      Seurat data in RDS format
+      Seurat object.
+      RDS format
 
   seurat_data_h5seurat:
     type: File?
     outputBinding:
       glob: "*_data.h5seurat"
     doc: |
-      Seurat data in h5seurat format
+      Seurat object.
+      h5Seurat format
 
-  seurat_data_h5ad:
+  seurat_rna_data_h5ad:
     type: File?
     outputBinding:
-      glob: "*_data.h5ad"
+      glob: "*_rna_counts.h5ad"
     doc: |
-      Seurat data in h5ad format
+      Seurat object.
+      RNA counts.
+      H5AD format.
+
+  seurat_atac_data_h5ad:
+    type: File?
+    outputBinding:
+      glob: "*_atac_counts.h5ad"
+    doc: |
+      Seurat object.
+      ATAC counts.
+      H5AD format.
+
+  seurat_rna_data_cloupe:
+    type: File?
+    outputBinding:
+      glob: "*_rna_counts.cloupe"
+    doc: |
+      Seurat object.
+      RNA counts.
+      Loupe format
+
+  sc_report_html_file:
+    type: File?
+    outputBinding:
+      glob: "sc_report.html"
+    doc: |
+      Tehcnical report.
+      HTML format.
 
   stdout_log:
     type: stdout
@@ -341,7 +397,10 @@ outputs:
     type: stderr
 
 
-baseCommand: ["sc_triangulate.R"]
+baseCommand: ["Rscript"]
+arguments:
+- valueFrom: $(inputs.export_html_report?["/usr/local/bin/sc_report_wrapper.R", "/usr/local/bin/sc_triangulate.R"]:"/usr/local/bin/sc_triangulate.R")
+
 
 stdout: sc_triangulate_stdout.log
 stderr: sc_triangulate_stderr.log
@@ -354,8 +413,8 @@ $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
 
-label: "Single-cell Label Integration Analysis"
-s:name: "Single-cell Label Integration Analysis"
+label: "Single-Cell Label Integration Analysis"
+s:name: "Single-Cell Label Integration Analysis"
 s:alternateName: "Harmonizes conflicting annotations in single-cell genomics studies"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/sc-triangulate.cwl
@@ -394,20 +453,22 @@ s:creator:
 
 
 doc: |
-  Single-cell Label Integration Analysis
+  Single-Cell Label Integration Analysis
 
   Harmonizes conflicting annotations in single-cell genomics studies.
 
 
 s:about: |
-  usage: sc_triangulate.R
-        [-h] --query QUERY [--barcodes BARCODES] --source SOURCE [SOURCE ...]
-        [--target TARGET] [--pdf] [--verbose] [--h5seurat] [--h5ad] [--cbbuild]
-        [--output OUTPUT]
-        [--theme {gray,bw,linedraw,light,dark,minimal,classic,void}]
-        [--cpus CPUS] [--memory MEMORY]
+  usage: /usr/local/bin/sc_triangulate.R [-h] --query QUERY
+                                        [--barcodes BARCODES] --source SOURCE
+                                        [SOURCE ...] [--target TARGET] [--pdf]
+                                        [--verbose] [--h5seurat] [--h5ad]
+                                        [--cbbuild] [--output OUTPUT]
+                                        [--theme {gray,bw,linedraw,light,dark,minimal,classic,void}]
+                                        [--cpus CPUS] [--memory MEMORY]
+                                        [--seed SEED]
 
-  Single-cell Label Integration Analysis
+  Single-Cell Label Integration Analysis
 
   optional arguments:
     -h, --help            show this help message and exit
@@ -432,7 +493,12 @@ s:about: |
     --pdf                 Export plots in PDF. Default: false
     --verbose             Print debug information. Default: false
     --h5seurat            Save Seurat data to h5seurat file. Default: false
-    --h5ad                Save Seurat data to h5ad file. Default: false
+    --h5ad                Save raw counts from the RNA and/or ATAC assay(s) to
+                          h5ad file(s). Default: false
+    --loupe               Save raw counts from the RNA assay to Loupe file. By
+                          enabling this feature you accept the End-User License
+                          Agreement available at https://10xgen.com/EULA.
+                          Default: false
     --cbbuild             Export results to UCSC Cell Browser. Default: false
     --output OUTPUT       Output prefix. Default: ./sc
     --theme {gray,bw,linedraw,light,dark,minimal,classic,void}
@@ -440,3 +506,4 @@ s:about: |
     --cpus CPUS           Number of cores/cpus to use. Default: 1
     --memory MEMORY       Maximum memory in GB allowed to be shared between the
                           workers when using multiple --cpus. Default: 32
+    --seed SEED           Seed number for random values. Default: 42

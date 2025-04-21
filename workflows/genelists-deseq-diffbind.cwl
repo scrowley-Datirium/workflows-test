@@ -13,6 +13,7 @@ requirements:
   genelists:
     - "filter-deseq-for-heatmap.cwl"
     - "filter-diffbind-for-heatmap.cwl"
+    - "filter-peaks-for-heatmap.cwl"
     - "genelists-sets.cwl"
   samples_nabinding:
     - "chipseq-se.cwl"
@@ -36,7 +37,7 @@ requirements:
     - "trim-rnaseq-pe-dutp.cwl"
     - "trim-rnaseq-pe-smarter-dutp.cwl"
     - "trim-rnaseq-se-dutp.cwl"
-    - "trim-quantseq-mrnaseq-se.cwl"
+    - "trim-quantseq-mrnaseq-se-strand-specific.cwl"
 
 
 inputs:
@@ -163,7 +164,7 @@ outputs:
     doc: "GCT formatted peak and expression data for morpheus viewer"
     outputSource: data_integration/heatmap_gct
 
-  heatmap_html:
+  heatmap_nonorm_html:
     type: File
     outputSource: data_integration/heatmap_html
     label: "Heatmap of peak and expression data"
@@ -196,6 +197,16 @@ outputs:
         tab: 'Overview'
         target: "_blank"
 
+  stdout_log_file:
+    type: File
+    outputSource: data_integration/log_file_stdout
+    label: "log file stdout"
+
+  stderr_log_file:
+    type: File
+    outputSource: data_integration/log_file_stderr
+    label: "log file stderr"
+
 
 steps:
 
@@ -219,8 +230,8 @@ steps:
       - heatmap_html
       - heatmap_peaknorm95_html
       - heatmap_peaknorm99_html
-      - log_file_std_out
-      - log_file_std_err
+      - log_file_stdout
+      - log_file_stderr
 
 
 $namespaces:

@@ -26,35 +26,57 @@ requirements:
       };
 
 
-'sd:upstream':
+"sd:upstream":
   sc_tools_sample:
-  - "sc-ctype-assign.cwl"
   - "sc-rna-cluster.cwl"
   - "sc-atac-cluster.cwl"
   - "sc-wnn-cluster.cwl"
-  sc_arc_sample:
+  - "sc-rna-azimuth.cwl"
+  sc_atac_sample:
   - "cellranger-arc-count.cwl"
   - "cellranger-arc-aggr.cwl"
+  - "cellranger-atac-count.cwl"
+  - "cellranger-atac-aggr.cwl"
 
 
 inputs:
 
   alias:
     type: string
-    label: "Experiment short name/alias"
+    label: "Analysis name"
     sd:preview:
       position: 1
 
   query_data_rds:
     type: File
-    label: "Experiment run through any of the Single-cell Cluster Analysis"
+    label: "Single-cell Cluster Analysis"
     doc: |
-      Path to the RDS file to load Seurat object from. This file should include
-      genes expression and/or chromatin accessibility information stored in the RNA
-      and ATAC assays correspondingly. Additionally, 'rnaumap', and/or 'atacumap',
-      and/or 'wnnumap' dimensionality reductions should be present.
-    'sd:upstreamSource': "sc_tools_sample/seurat_data_rds"
-    'sd:localLabel': true
+      Analysis that includes clustered
+      single-cell data and was run through
+      at least one of the following workflows:
+      "Single-Cell RNA-Seq Cluster Analysis",
+      "Single-Cell ATAC-Seq Cluster Analysis",
+      "Single-Cell WNN Cluster Analysis", -
+      at any of the processing stages.
+    "sd:upstreamSource": "sc_tools_sample/seurat_data_rds"
+    "sd:localLabel": true
+
+  atac_fragments_file:
+    type: File?
+    secondaryFiles:
+    - .tbi
+    label: "Cell Ranger ATAC or RNA+ATAC Sample (optional)"
+    doc: |
+      Any "Cell Ranger ATAC or RNA+ATAC Sample"
+      for generating ATAC fragments coverage
+      plots over the genes of interest. This
+      sample can be obtained from one of the
+      following pipelines: "Cell Ranger Count
+      (RNA+ATAC)", "Cell Ranger Aggregate
+      (RNA+ATAC)", "Cell Ranger Count (ATAC)",
+      or "Cell Ranger Aggregate (ATAC)".
+    "sd:upstreamSource": "sc_atac_sample/atac_fragments_file"
+    "sd:localLabel": true
 
   query_reduction:
     type:
@@ -65,123 +87,142 @@ inputs:
       - "ATAC"
       - "WNN"
     default: "RNA"
-    label: "Select clusters based on"
+    label: "Dimensionality reduction"
     doc: |
-      If set to 'RNA', then 'get_query_column' will have suffix 'rna_res'.
-      If set to 'ATAC', then 'get_query_column' will have suffix 'atac_res'.
-      If set to 'WNN', then 'get_query_column' will have suffix 'wsnn_res'.
+      Dimensionality reduction for which
+      cluster names should be assigned.
   
   query_resolution:
     type: float
-    label: "Clustering resolution to assign cell types to"
+    label: "Clustering resolution"
     doc: |
-      Clustering resolution defines 'query_source_column' and 'query_target_column'
-      inputs for 'assign_cell_types' step
+      Clustering resolution for the selected
+      "Dimensionality reduction" to be used
+      for cluster names assignment.
 
-  atac_fragments_file:
-    type: File?
-    secondaryFiles:
-    - .tbi
-    label: "Cell Ranger ARC Count/Aggregate Experiment for ATAC or WNN clusters"
+  query_splitby_column:
+    type:
+    - "null"
+    - type: enum
+      symbols:
+      - "dataset"
+      - "condition"
+      - "none"
+    default: "none"
+    label: "Criteria to split every cluster by (optional)"
     doc: |
-      Count and barcode information for every ATAC fragment used in the loaded Seurat
-      object. File should be saved in TSV format with tbi-index file. Ignored if the
-      loaded Seurat object doesn't include ATAC assay.
-    'sd:upstreamSource': "sc_arc_sample/atac_fragments_file"
-    'sd:localLabel': true
-
-  genes_of_interest:
-    type: string?
-    default: null
-    label: "Genes of interest to build gene expression and/or Tn5 insertion frequency plots for the nearest peaks"
-    doc: |
-      Genes of interest to build gene expression and/or Tn5 insertion frequency plots
-      for the nearest peaks. To build gene expression plots the loaded Seurat object
-      should include RNA assay. To build Tn5 insertion frequency plots for the nearest
-      peaks the loaded Seurat object should include ATAC assay as well as the --fragments
-      file should be provided.
-      Default: None
-
-  cell_type_data:
-    type: File
-    label: "TSV/CSV cell types metadata file with 'cluster' and 'type' columns"
-    doc: |
-      Path to the TSV/CSV file for manual cell type assignment for each of the clusters.
-      First column - 'cluster', second column may have arbitrary name.
+      Criteria to split every cluster defined by
+      the selected dimensionality reduction and
+      resolution into several groups.
+      Default: "none"
 
   identify_diff_genes:
     type: boolean?
-    default: false
-    label: "Identify differentially expressed genes for assigned cell types"
+    default: true
+    label: "Find gene markers"
     doc: |
-      Identify differentially expressed genes (putative gene markers) for
-      assigned cell types. Ignored if loaded Seurat object doesn't include
-      genes expression information stored in the RNA assay.
-      Default: false
-    'sd:layout':
-      advanced: true
+      Identify upregulated genes in each
+      cell type compared to all other cells.
+      Include only genes that are expressed
+      in at least 10% of the cells coming
+      from either current cell type or from
+      all other cell types together.
+      Exclude cells with log2FoldChange
+      values less than 0.25. Use Wilcoxon
+      Rank Sum test to calculate P-values.
+      Keep only genes with P-values lower
+      than 0.01. Adjust P-values for multiple
+      comparisons using Bonferroni correction.
+      Default: true
 
   identify_diff_peaks:
     type: boolean?
     default: false
-    label: "Identify differentially accessible peaks for assigned cell types"
+    label: "Find peak markers"
     doc: |
-      Identify differentially accessible peaks for assigned cell types. Ignored
-      if loaded Seurat object doesn't include chromatin accessibility information
-      stored in the ATAC assay.
+      Identify differentially accessible
+      peaks in each cell type compared to
+      all other cells. Include only peaks
+      that are present in at least 5% of
+      the cells coming from either current
+      cell type or from all other cell
+      types together. Exclude cells with
+      log2FoldChange values less than 0.25.
+      Use logistic regression framework to
+      calculate P-values. Keep only genes
+      with P-values lower than 0.01. Adjust
+      P-values for multiple comparisons
+      using Bonferroni correction.
       Default: false
-    'sd:layout':
+
+  genes_of_interest:
+    type: string?
+    default: null
+    label: "Genes of interest"
+    doc: |
+      Comma or space separated list of genes
+      of interest to visualize expression and
+      to generate ATAC fragments coverage plots.
+      Ignored if "Cell Ranger ATAC or RNA+ATAC
+      Sample (optional)" input is not provided.
+      Default: None
+
+  cell_type_data:
+    type: File
+    label: "Cell types"
+    doc: |
+      A TSV/CSV file with the names for each
+      cluster defined by "Clustering resolution"
+      and "Dimensionality reduction" parameters.
+      The file should have two columns named
+      'cluster' and 'celltype'.
+
+  barcodes_data:
+    type: File?
+    label: "Selected cell barcodes (optional)"
+    doc: |
+      A TSV/CSV file to optionally extend
+      the single cell metadata with the custom
+      values per each barcode. The provided
+      file should include the first column
+      named "barcode", with one cell barcode
+      per line. All other columns, except for
+      the "barcode", will be added to the single
+      cell metadata loaded from the "Single-cell
+      Cluster Analysis" and can be utilized in
+      the current or future steps of analysis.
+
+  genesets_data:
+    type: File?
+    label: "GMT file for calculating average expression levels per gene set (optional)"
+    doc: |
+      Path to the GMT file for calculating average expression levels
+      (module scores) per gene set. This file can be downloaded from
+      the Molecular Signatures Database (MSigDB) following the link
+      https://www.gsea-msigdb.org/gsea/msigdb. To calculate module
+      scores the loaded Seurat object should include RNA assay.
+      Default: do not calculate gene set expression scores.
+
+  export_loupe_data:
+    type: boolean?
+    default: false
+    label: "Save raw counts to Loupe file. I confirm that data is generated by 10x technology and accept the EULA available at https://10xgen.com/EULA"
+    doc: |
+      Save raw counts from the RNA assay to Loupe file. By
+      enabling this feature you accept the End-User License
+      Agreement available at https://10xgen.com/EULA.
+      Default: false
+    "sd:layout":
       advanced: true
 
-  rna_minimum_logfc:
-    type: float?
-    default: 0.25
-    label: "Include only those genes that on average have log fold change difference in expression between every tested pair of cell types not lower than this value"
+  export_html_report:
+    type: boolean?
+    default: true
+    label: "Show HTML report"
     doc: |
-      For putative gene markers identification include only those genes that
-      on average have log fold change difference in expression between every
-      tested pair of cell types not lower than this value. Ignored if '--diffgenes'
-      is not set or RNA assay is not present.
-      Default: 0.25
-    'sd:layout':
-      advanced: true
-
-  rna_minimum_pct:
-    type: float?
-    default: 0.1
-    label: "Include only those genes that are detected in not lower than this fraction of cells in either of the two tested cell types"
-    doc: |
-      For putative gene markers identification include only those genes that
-      are detected in not lower than this fraction of cells in either of the
-      two tested cell types. Ignored if '--diffgenes' is not set or RNA assay
-      is not present.
-      Default: 0.1
-    'sd:layout':
-      advanced: true
-
-  atac_minimum_logfc:
-    type: float?
-    default: 0.25
-    label: "Include only those peaks that on average have log fold change difference in the chromatin accessibility between every tested pair of cell types not lower than this value"
-    doc: |
-      For differentially accessible peaks identification include only those peaks that
-      on average have log fold change difference in the chromatin accessibility between
-      every tested pair of cell types not lower than this value. Ignored if '--diffpeaks'
-      is not set or ATAC assay is not present.
-      Default: 0.25
-    'sd:layout':
-      advanced: true
-
-  atac_minimum_pct:
-    type: float?
-    default: 0.05
-    label: "Include only those peaks that are detected in not lower than this fraction of cells in either of the two tested cell types"
-    doc: |
-      For differentially accessible peaks identification include only those peaks that
-      are detected in not lower than this fraction of cells in either of the two tested
-      cell types. Ignored if '--diffpeaks' is not set or ATAC assay is not present.
-      Default: 0.05
-    'sd:layout':
+      Export tehcnical report in HTML format.
+      Default: true
+    "sd:layout":
       advanced: true
 
   color_theme:
@@ -198,41 +239,12 @@ inputs:
       - "classic"
       - "void"
     default: "classic"
-    label: "Color theme for all generated plots"
+    label: "Plots color theme"
     doc: |
-      Color theme for all generated plots. One of gray, bw, linedraw, light,
-      dark, minimal, classic, void.
+      Color theme for all plots saved
+      as PNG files.
       Default: classic
-    'sd:layout':
-      advanced: true
-
-  parallel_memory_limit:
-    type:
-    - "null"
-    - type: enum
-      symbols:
-      - "32"
-    default: "32"
-    label: "Maximum memory in GB allowed to be shared between the workers when using multiple CPUs"
-    doc: |
-      Maximum memory in GB allowed to be shared between the workers
-      when using multiple --cpus.
-      Forced to 32 GB
-    'sd:layout':
-      advanced: true
-
-  vector_memory_limit:
-    type:
-    - "null"
-    - type: enum
-      symbols:
-      - "64"
-    default: "64"
-    label: "Maximum vector memory in GB allowed to be used by R"
-    doc: |
-      Maximum vector memory in GB allowed to be used by R.
-      Forced to 64 GB
-    'sd:layout':
+    "sd:layout":
       advanced: true
 
   threads:
@@ -241,349 +253,342 @@ inputs:
     - type: enum
       symbols:
       - "1"
-    default: "1"
-    label: "Number of cores/cpus to use"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+      - "6"
+    default: "4"
+    label: "Cores/CPUs"
     doc: |
-      Number of cores/cpus to use
-      Forced to 1
-    'sd:layout':
+      Parallelization parameter to define the
+      number of cores/CPUs that can be utilized
+      simultaneously.
+      Default: 4
+    "sd:layout":
       advanced: true
 
 
 outputs:
 
-  umap_rd_rnaumap_plot_png:
+  cell_cnts_gr_ctyp_plot_png:
     type: File?
-    outputSource: ctype_assign/umap_rd_rnaumap_plot_png
-    label: "Clustered cells RNA UMAP with assigned cell types"
+    outputSource: ctype_assign/cell_cnts_gr_ctyp_plot_png
+    label: "Number of cells per cell type (all cells)"
     doc: |
-      Cells UMAP with assigned cell types (rnaumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      Number of cells per cell type.
+      All cells.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Overall'
-        Caption: 'Clustered cells RNA UMAP with assigned cell types'
+        tab: "QC"
+        Caption: "Number of cells per cell type (all cells)"
 
-  umap_rd_atacumap_plot_png:
+  qc_mtrcs_dnst_gr_ctyp_plot_png:
     type: File?
-    outputSource: ctype_assign/umap_rd_atacumap_plot_png
-    label: "Clustered cells ATAC UMAP with assigned cell types"
+    outputSource: ctype_assign/qc_mtrcs_dnst_gr_ctyp_plot_png
+    label: "Distribution of QC metrics per cell colored by cell type (all cells)"
     doc: |
-      Cells UMAP with assigned cell types (atacumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      Distribution of QC metrics per cell
+      colored by cell type.
+      All cells.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Overall'
-        Caption: 'Clustered cells ATAC UMAP with assigned cell types'
+        tab: "QC"
+        Caption: "Distribution of QC metrics per cell colored by cell type (all cells)"
 
-  umap_rd_wnnumap_plot_png:
+  gene_umi_spl_ctyp_plot_png:
     type: File?
-    outputSource: ctype_assign/umap_rd_wnnumap_plot_png
-    label: "Clustered cells WNN UMAP with assigned cell types"
+    outputSource: ctype_assign/gene_umi_spl_ctyp_plot_png
+    label: "Genes vs RNA reads per cell (split by cell type, all cells)"
     doc: |
-      Cells UMAP with assigned cell types (wnnumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      Genes vs RNA reads per cell.
+      Split by cell type; all cells.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Overall'
-        Caption: 'Clustered cells WNN UMAP with assigned cell types'
+        tab: "QC"
+        Caption: "Genes vs RNA reads per cell (split by cell type, all cells)"
 
-  umap_spl_idnt_rd_rnaumap_plot_png:
+  umi_mito_spl_ctyp_plot_png:
     type: File?
-    outputSource: ctype_assign/umap_spl_idnt_rd_rnaumap_plot_png
-    label: "Split by dataset clustered cells RNA UMAP with assigned cell types"
+    outputSource: ctype_assign/umi_mito_spl_ctyp_plot_png
+    label: "RNA reads vs mitochondrial % per cell (split by cell type, all cells)"
     doc: |
-      Split by dataset cells UMAP with assigned cell types (rnaumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      RNA reads vs mitochondrial % per cell.
+      Split by cell type; all cells.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per dataset'
-        Caption: 'Split by dataset clustered cells RNA UMAP with assigned cell types'
+        tab: "QC"
+        Caption: "RNA reads vs mitochondrial % per cell (split by cell type, all cells)"
 
-  umap_spl_idnt_rd_atacumap_plot_png:
+  tss_frgm_spl_ctyp_plot_png:
     type: File?
-    outputSource: ctype_assign/umap_spl_idnt_rd_atacumap_plot_png
-    label: "Split by dataset clustered cells ATAC UMAP with assigned cell types"
+    outputSource: ctype_assign/tss_frgm_spl_ctyp_plot_png
+    label: "TSS enrichment score vs ATAC fragments in peaks per cell (split by cell type, all cells)"
     doc: |
-      Split by dataset cells UMAP with assigned cell types (atacumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      TSS enrichment score vs ATAC
+      fragments in peaks per cell.
+      Split by cell type; all cells.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per dataset'
-        Caption: 'Split by dataset clustered cells ATAC UMAP with assigned cell types'
+        tab: "QC"
+        Caption: "TSS enrichment score vs ATAC fragments in peaks per cell (split by cell type, all cells)"
 
-  umap_spl_idnt_rd_wnnumap_plot_png:
+  rna_atac_cnts_spl_ctyp_plot_png:
     type: File?
-    outputSource: ctype_assign/umap_spl_idnt_rd_wnnumap_plot_png
-    label: "Split by dataset clustered cells WNN UMAP with assigned cell types"
+    outputSource: ctype_assign/rna_atac_cnts_spl_ctyp_plot_png
+    label: "RNA reads vs ATAC fragments in peaks per cell (split by cell type, all cells)"
     doc: |
-      Split by dataset cells UMAP with assigned cell types (wnnumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      RNA reads vs ATAC fragments in peaks per cell.
+      Split by cell type; all cells.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per dataset'
-        Caption: 'Split by dataset clustered cells WNN UMAP with assigned cell types'
+        tab: "QC"
+        Caption: "RNA reads vs ATAC fragments in peaks per cell (split by cell type, all cells)"
 
-  umap_spl_cnd_rd_rnaumap_plot_png:
+  rnadbl_gr_ctyp_plot_png:
     type: File?
-    outputSource: ctype_assign/umap_spl_cnd_rd_rnaumap_plot_png
-    label: "Split by grouping condition clustered cells RNA UMAP with assigned cell types"
+    outputSource: ctype_assign/rnadbl_gr_ctyp_plot_png
+    label: "Percentage of RNA doublets per cell type (all cells)"
     doc: |
-      Split by grouping condition cells UMAP with assigned cell types (rnaumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      Percentage of RNA doublets per cell type.
+      All cells.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per group'
-        Caption: 'Split by grouping condition clustered cells RNA UMAP with assigned cell types'
+        tab: "QC"
+        Caption: "Percentage of RNA doublets per cell type (all cells)"
 
-  umap_spl_cnd_rd_atacumap_plot_png:
+  atacdbl_gr_ctyp_plot_png:
     type: File?
-    outputSource: ctype_assign/umap_spl_cnd_rd_atacumap_plot_png
-    label: "Split by grouping condition clustered cells ATAC UMAP with assigned cell types"
+    outputSource: ctype_assign/atacdbl_gr_ctyp_plot_png
+    label: "Percentage of ATAC doublets per cell type (all cells)"
     doc: |
-      Split by grouping condition cells UMAP with assigned cell types (atacumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      Percentage of ATAC doublets per cell type.
+      All cells.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per group'
-        Caption: 'Split by grouping condition clustered cells ATAC UMAP with assigned cell types'
+        tab: "QC"
+        Caption: "Percentage of ATAC doublets per cell type (all cells)"
 
-  umap_spl_cnd_rd_wnnumap_plot_png:
+  vrlpdbl_gr_ctyp_plot_png:
     type: File?
-    outputSource: ctype_assign/umap_spl_cnd_rd_wnnumap_plot_png
-    label: "Split by grouping condition clustered cells WNN UMAP with assigned cell types"
+    outputSource: ctype_assign/vrlpdbl_gr_ctyp_plot_png
+    label: "Percentage of RNA and ATAC doublets per cell type (all cells)"
     doc: |
-      Split by grouping condition cells UMAP with assigned cell types (wnnumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      Percentage of RNA and ATAC doublets
+      per cell type.
+      All cells.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per group'
-        Caption: 'Split by grouping condition clustered cells WNN UMAP with assigned cell types'
+        tab: "QC"
+        Caption: "Percentage of RNA and ATAC doublets per cell type (all cells)"
 
-  umap_spl_ph_rd_rnaumap_plot_png:
+  umap_gr_ctyp_plot_png:
     type: File?
-    outputSource: ctype_assign/umap_spl_ph_rd_rnaumap_plot_png
-    label: "Split by cell cycle phase cells RNA UMAP with assigned cell types"
+    outputSource: ctype_assign/umap_gr_ctyp_plot_png
+    label: "UMAP colored by cell type (all cells)"
     doc: |
-      Split by cell cycle phase cells UMAP with assigned cell types (rnaumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      UMAP colored by cell type.
+      All cells.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per dataset'
-        Caption: 'Split by cell cycle phase cells RNA UMAP with assigned cell types'
+        tab: "Split by cell type"
+        Caption: "UMAP colored by cell type (all cells)"
 
-  umap_spl_ph_rd_atacumap_plot_png:
+  umap_gr_ctyp_spl_ph_png:
     type: File?
-    outputSource: ctype_assign/umap_spl_ph_rd_atacumap_plot_png
-    label: "Split by cell cycle phase cells ATAC UMAP with assigned cell types"
+    outputSource: ctype_assign/umap_gr_ctyp_spl_ph_png
+    label: "UMAP colored by cell type (split by cell cycle phase, optionally downsampled)"
     doc: |
-      Split by cell cycle phase cells UMAP with assigned cell types (atacumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      UMAP colored by cell type.
+      Split by cell cycle phase; downsampled
+      to the smallest dataset (if multiple
+      datasets are analyzed jointly).
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per dataset'
-        Caption: 'Split by cell cycle phase cells ATAC UMAP with assigned cell types'
+        tab: "Split by cell type"
+        Caption: "UMAP colored by cell type (split by cell cycle phase, optionally downsampled)"
 
-  umap_spl_ph_rd_wnnumap_plot_png:
+  cmp_gr_ph_spl_ctyp_png:
     type: File?
-    outputSource: ctype_assign/umap_spl_ph_rd_wnnumap_plot_png
-    label: "Split by cell cycle phase cells WNN UMAP with assigned cell types"
+    outputSource: ctype_assign/cmp_gr_ph_spl_ctyp_png
+    label: "Composition plot colored by cell cycle phase (split by cell type, optionally downsampled)"
     doc: |
-      Split by cell cycle phase cells UMAP with assigned cell types (wnnumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      Composition plot colored by cell cycle phase.
+      Split by cell type; downsampled to the
+      smallest dataset (if multiple datasets are
+      analyzed jointly).
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per dataset'
-        Caption: 'Split by cell cycle phase cells WNN UMAP with assigned cell types'
+        tab: "Split by cell type"
+        Caption: "Composition plot colored by cell cycle phase (split by cell type, optionally downsampled)"
+
+  umap_gr_ctyp_spl_idnt_plot_png:
+    type: File?
+    outputSource: ctype_assign/umap_gr_ctyp_spl_idnt_plot_png
+    label: "UMAP colored by cell type (split by dataset, downsampled)"
+    doc: |
+      UMAP colored by cell type.
+      Split by dataset; downsampled to the
+      smallest dataset.
+      PNG format.
+    "sd:visualPlugins":
+    - image:
+        tab: "Split by dataset"
+        Caption: "UMAP colored by cell type (split by dataset, downsampled)"
 
   cmp_gr_ctyp_spl_idnt_plot_png:
     type: File?
     outputSource: ctype_assign/cmp_gr_ctyp_spl_idnt_plot_png
-    label: "Grouped by cell type split by dataset cells composition plot. Downsampled."
+    label: "Composition plot colored by cell type (split by dataset, downsampled)"
     doc: |
-      Grouped by cell type split by dataset cells composition plot. Downsampled.
-      PNG format
-    'sd:visualPlugins':
+      Composition plot colored by cell type.
+      Split by dataset; downsampled to the
+      smallest dataset.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Overall'
-        Caption: 'Grouped by cell type split by dataset cells composition plot. Downsampled.'
+        tab: "Split by dataset"
+        Caption: "Composition plot colored by cell type (split by dataset, downsampled)"
 
-  cmp_gr_idnt_spl_ctyp_plot_png:
+  umap_gr_ph_spl_idnt_plot_png:
     type: File?
-    outputSource: ctype_assign/cmp_gr_idnt_spl_ctyp_plot_png
-    label: "Grouped by dataset split by cell type cells composition plot. Downsampled."
+    outputSource: ctype_assign/umap_gr_ph_spl_idnt_plot_png
+    label: "UMAP colored by cell cycle phase (split by dataset, downsampled)"
     doc: |
-      Grouped by dataset split by cell type cells composition plot. Downsampled.
-      PNG format
-    'sd:visualPlugins':
+      UMAP colored by cell cycle phase.
+      Split by dataset; downsampled to the
+      smallest dataset.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per dataset'
-        Caption: 'Grouped by dataset split by cell type cells composition plot. Downsampled.'
+        tab: "Split by dataset"
+        Caption: "UMAP colored by cell cycle phase (split by dataset, downsampled)"
 
   cmp_gr_ph_spl_idnt_plot_png:
     type: File?
     outputSource: ctype_assign/cmp_gr_ph_spl_idnt_plot_png
-    label: "Grouped by cell cycle phase split by dataset cells composition plot. Downsampled."
+    label: "Composition plot colored by cell cycle phase (split by dataset, downsampled)"
     doc: |
-      Grouped by cell cycle phase split by dataset cells composition plot. Downsampled.
-      PNG format
-    'sd:visualPlugins':
+      Composition plot colored by cell cycle phase.
+      Split by dataset; downsampled to the smallest
+      dataset.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per dataset'
-        Caption: 'Grouped by cell cycle phase split by dataset cells composition plot. Downsampled.'
+        tab: "Split by dataset"
+        Caption: "Composition plot colored by cell cycle phase (split by dataset, downsampled)"
+
+  umap_gr_ctyp_spl_cnd_plot_png:
+    type: File?
+    outputSource: ctype_assign/umap_gr_ctyp_spl_cnd_plot_png
+    label: "UMAP colored by cell type (split by grouping condition, downsampled)"
+    doc: |
+      UMAP colored by cell type.
+      Split by grouping condition; first downsampled
+      to the smallest dataset, then downsampled to
+      the smallest group.
+      PNG format.
+    "sd:visualPlugins":
+    - image:
+        tab: "Split by group"
+        Caption: "UMAP colored by cell type (split by grouping condition, downsampled)"
 
   cmp_gr_ctyp_spl_cnd_plot_png:
     type: File?
     outputSource: ctype_assign/cmp_gr_ctyp_spl_cnd_plot_png
-    label: "Grouped by cell type split by condition cells composition plot. Downsampled."
+    label: "Composition plot colored by cell type (split by grouping condition, downsampled)"
     doc: |
-      Grouped by cell type split by condition cells composition plot. Downsampled.
-      PNG format
-    'sd:visualPlugins':
+      Composition plot colored by cell type.
+      Split by grouping condition; first downsampled
+      to the smallest dataset, then downsampled to
+      the smallest group.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per group'
-        Caption: 'Grouped by cell type split by condition cells composition plot. Downsampled.'
+        tab: "Split by group"
+        Caption: "Composition plot colored by cell type (split by grouping condition, downsampled)"
 
-  cmp_gr_cnd_spl_ctyp_plot_png:
+  umap_gr_ph_spl_cnd_plot_png:
     type: File?
-    outputSource: ctype_assign/cmp_gr_cnd_spl_ctyp_plot_png
-    label: "Grouped by condition split by cell type cells composition plot. Downsampled."
+    outputSource: ctype_assign/umap_gr_ph_spl_cnd_plot_png
+    label: "UMAP colored by cell cycle phase (split by grouping condition, downsampled)"
     doc: |
-      Grouped by condition split by cell type cells composition plot. Downsampled.
-      PNG format
-    'sd:visualPlugins':
+      UMAP colored by cell cycle phase.
+      Split by grouping condition; first downsampled
+      to the smallest dataset, then downsampled to
+      the smallest group.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per group'
-        Caption: 'Grouped by condition split by cell type cells composition plot. Downsampled.'
+        tab: "Split by group"
+        Caption: "UMAP colored by cell cycle phase (split by grouping condition, downsampled)"
 
-  cmp_gr_ph_spl_ctyp_plot_png:
+  cmp_gr_ph_spl_cnd_plot_png:
     type: File?
-    outputSource: ctype_assign/cmp_gr_ph_spl_ctyp_plot_png
-    label: "Grouped by cell cycle phase split by cell type cells composition plot. Downsampled."
+    outputSource: ctype_assign/cmp_gr_ph_spl_cnd_plot_png
+    label: "Composition plot colored by cell cycle phase (split by grouping condition, downsampled)"
     doc: |
-      Grouped by cell cycle phase split by cell type cells composition plot. Downsampled.
-      PNG format
-    'sd:visualPlugins':
+      Composition plot colored by cell cycle phase.
+      Split by grouping condition; first downsampled
+      to the smallest dataset, then downsampled to
+      the smallest group.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Per dataset'
-        Caption: 'Grouped by cell cycle phase split by cell type cells composition plot. Downsampled.'
+        tab: "Split by group"
+        Caption: "Composition plot colored by cell cycle phase (split by grouping condition, downsampled)"
 
   xpr_avg_plot_png:
     type: File?
     outputSource: ctype_assign/xpr_avg_plot_png
-    label: "Log normalized scaled average gene expression per cell type"
+    label: "Average gene expression"
     doc: |
-      Log normalized scaled average gene expression per cell type.
-      PNG format
-    'sd:visualPlugins':
+      Average gene expression.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Gene expression'
-        Caption: 'Log normalized scaled average gene expression per cell type'
+        tab: "Genes of interest (expression)"
+        Caption: "Average gene expression"
 
   xpr_dnst_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
+    type: File?
     outputSource: ctype_assign/xpr_dnst_plot_png
-    label: "Log normalized gene expression density per cell type"
+    label: "Gene expression density"
     doc: |
-      Log normalized gene expression density per cell type.
-      PNG format
-    'sd:visualPlugins':
+      Gene expression density.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Gene expression'
-        Caption: 'Log normalized gene expression density per cell type'
+        tab: "Genes of interest (expression)"
+        Caption: "Gene expression density"
 
-  xpr_per_cell_rd_rnaumap_plot_png:
+  xpr_per_cell_plot_png:
     type:
     - "null"
     - type: array
       items: File
-    outputSource: ctype_assign/xpr_per_cell_rd_rnaumap_plot_png
-    label: "Log normalized gene expression on cells RNA UMAP with assigned cell types"
+    outputSource: ctype_assign/xpr_per_cell_plot_png
+    label: "UMAP colored by gene expression (per gene)"
     doc: |
-      Log normalized gene expression on cells UMAP with assigned cell types (rnaumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
+      UMAP colored by gene expression.
+      All genes of interest.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Gene expression'
-        Caption: 'Log normalized gene expression on cells RNA UMAP with assigned cell types'
-
-  xpr_per_cell_rd_atacumap_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputSource: ctype_assign/xpr_per_cell_rd_atacumap_plot_png
-    label: "Log normalized gene expression on cells ATAC UMAP with assigned cell types"
-    doc: |
-      Log normalized gene expression on cells UMAP with assigned cell types (atacumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
-    - image:
-        tab: 'Gene expression'
-        Caption: 'Log normalized gene expression on cells ATAC UMAP with assigned cell types'
-
-  xpr_per_cell_rd_wnnumap_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputSource: ctype_assign/xpr_per_cell_rd_wnnumap_plot_png
-    label: "Log normalized gene expression on cells WNN UMAP with assigned cell types"
-    doc: |
-      Log normalized gene expression on cells UMAP with assigned cell types (wnnumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
-    - image:
-        tab: 'Gene expression'
-        Caption: 'Log normalized gene expression on cells WNN UMAP with assigned cell types'
-
-  xpr_per_cell_sgnl_rd_rnaumap_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputSource: ctype_assign/xpr_per_cell_sgnl_rd_rnaumap_plot_png
-    label: "Log normalized gene expression density on cells RNA UMAP with assigned cell types"
-    doc: |
-      Log normalized gene expression density on cells UMAP with assigned cell types (rnaumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
-    - image:
-        tab: 'Gene expression'
-        Caption: 'Log normalized gene expression density on cells RNA UMAP with assigned cell types'
-
-  xpr_per_cell_sgnl_rd_atacumap_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputSource: ctype_assign/xpr_per_cell_sgnl_rd_atacumap_plot_png
-    label: "Log normalized gene expression density on cells ATAC UMAP with assigned cell types"
-    doc: |
-      Log normalized gene expression density on cells UMAP with assigned cell types (atacumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
-    - image:
-        tab: 'Gene expression'
-        Caption: 'Log normalized gene expression density on cells ATAC UMAP with assigned cell types'
-
-  xpr_per_cell_sgnl_rd_wnnumap_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputSource: ctype_assign/xpr_per_cell_sgnl_rd_wnnumap_plot_png
-    label: "Log normalized gene expression density on cells WNN UMAP with assigned cell types"
-    doc: |
-      Log normalized gene expression density on cells UMAP with assigned cell types (wnnumap dim. reduction).
-      PNG format
-    'sd:visualPlugins':
-    - image:
-        tab: 'Gene expression'
-        Caption: 'Log normalized gene expression density on cells WNN UMAP with assigned cell types'
+        tab: "Genes of interest (expression)"
+        Caption: "UMAP colored by gene expression (per gene)"
 
   cvrg_plot_png:
     type:
@@ -591,96 +596,201 @@ outputs:
     - type: array
       items: File
     outputSource: ctype_assign/cvrg_plot_png
-    label: "Tn5 insertion frequency plot around gene"
+    label: "ATAC fragment coverage (per gene)"
     doc: |
-      Tn5 insertion frequency plot around gene.
-      PNG format
-    'sd:visualPlugins':
+      ATAC fragment coverage.
+      All genes of interest.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Genome coverage'
-        Caption: 'Tn5 insertion frequency plot around gene'
+        tab: "Genes of interest (coverage)"
+        Caption: "ATAC fragment coverage (per gene)"
+
+  gse_per_cell_plot_png:
+    type: File?
+    outputSource: ctype_assign/gse_per_cell_plot_png
+    label: "UMAP colored by gene set expression score"
+    doc: |
+      UMAP colored by gene set expression score.
+      PNG format.
+    "sd:visualPlugins":
+    - image:
+        tab: "Gene sets of interest (expression)"
+        Caption: "UMAP colored by gene set expression score"
+
+  gse_avg_plot_png:
+    type: File?
+    outputSource: ctype_assign/gse_avg_plot_png
+    label: "Average gene set expression score"
+    doc: |
+      Average gene set expression score.
+      PNG format.
+    "sd:visualPlugins":
+    - image:
+        tab: "Gene sets of interest (expression)"
+        Caption: "Average gene set expression score"
+
+  gse_dnst_plot_png:
+    type: File?
+    outputSource: ctype_assign/gse_dnst_plot_png
+    label: "Gene set expression score density"
+    doc: |
+      Gene set expression score density.
+      PNG format.
+    "sd:visualPlugins":
+    - image:
+        tab: "Gene sets of interest (expression)"
+        Caption: "Gene set expression score density"
 
   xpr_htmp_plot_png:
     type: File?
     outputSource: ctype_assign/xpr_htmp_plot_png
-    label: "Normalized gene expression heatmap grouped by cell type"
+    label: "Gene expression heatmap (top gene markers)"
     doc: |
-      Normalized gene expression heatmap grouped by cell type.
-      PNG format
-    'sd:visualPlugins':
+      Gene expression heatmap.
+      Top gene markers.
+      PNG format.
+    "sd:visualPlugins":
     - image:
-        tab: 'Gene expression'
-        Caption: 'Normalized gene expression heatmap grouped by cell type'
+        tab: "Gene markers heatmap"
+        Caption: "Gene expression heatmap (top gene markers)"
+
+  xpr_htmp_tsv:
+    type: File?
+    outputSource: ctype_assign/xpr_htmp_tsv
+    label: "Gene expression heatmap (top gene markers)"
+    doc: |
+      Gene expression heatmap.
+      Top gene markers.
+      TSV format.
 
   gene_markers_tsv:
     type: File?
     outputSource: ctype_assign/gene_markers_tsv
-    label: "Differentially expressed genes between each pair of cell types"
+    label: "Gene markers"
     doc: |
-      Differentially expressed genes between each pair of cell types.
-      TSV format
-    'sd:visualPlugins':
+      Gene markers.
+      TSV format.
+    "sd:visualPlugins":
     - syncfusiongrid:
-        tab: 'Gene markers'
-        Title: 'Differentially expressed genes between each pair of cell types'
+        tab: "Gene markers table"
+        Title: "Gene markers"
 
   peak_markers_tsv:
     type: File?
     outputSource: ctype_assign/peak_markers_tsv
-    label: "Differentially accessible peaks between each pair of cell types"
+    label: "Peak markers"
     doc: |
-      Differentially accessible peaks between each pair of cell types.
-      TSV format
-    'sd:visualPlugins':
+      Peak markers.
+      TSV format.
+    "sd:visualPlugins":
     - syncfusiongrid:
-        tab: 'Diff. peaks'
-        Title: 'Differentially accessible peaks between each pair of cell types'
-
-  ucsc_cb_config_data:
-    type: File
-    outputSource: compress_cellbrowser_config_data/compressed_folder
-    label: "Compressed directory with UCSC Cellbrowser configuration data"
-    doc: |
-      Compressed directory with UCSC Cellbrowser configuration data.
+        tab: "Peak markers table"
+        Title: "Peak markers"
 
   ucsc_cb_html_data:
-    type: Directory
+    type: Directory?
     outputSource: ctype_assign/ucsc_cb_html_data
-    label: "Directory with UCSC Cellbrowser html data"
+    label: "UCSC Cell Browser (data)"
     doc: |
-      Directory with UCSC Cellbrowser html data.
+      UCSC Cell Browser html data.
 
   ucsc_cb_html_file:
-    type: File
+    type: File?
     outputSource: ctype_assign/ucsc_cb_html_file
-    label: "Open in UCSC Cell Browser"
+    label: "UCSC Cell Browser"
     doc: |
-      HTML index file from the directory with UCSC Cellbrowser html data.
-    'sd:visualPlugins':
+      UCSC Cell Browser html index.
+    "sd:visualPlugins":
     - linkList:
-        tab: 'Overview'
+        tab: "Overview"
         target: "_blank"
 
   seurat_data_rds:
     type: File
     outputSource: ctype_assign/seurat_data_rds
-    label: "Processed Seurat data in RDS format"
+    label: "Seurat object in RDS format"
     doc: |
-      Processed Seurat data in RDS format
+      Seurat object.
+      RDS format.
+
+  seurat_data_scope:
+    type: File?
+    outputSource: ctype_assign/seurat_data_scope
+    label: "Seurat object in SCope compatible loom format"
+    doc: |
+      Seurat object.
+      SCope compatible.
+      Loom format.
+
+  reference_data_rds:
+    type: File?
+    outputSource: ctype_assign/reference_data_rds
+    label: "Seurat object formatted as an Azimuth reference model"
+    doc: |
+      Seurat object with assigned cell
+      types formatted as an Azimuth
+      reference model.
+      RDS format.
+
+  reference_data_index:
+    type: File?
+    outputSource: ctype_assign/reference_data_index
+    label: "Annoy index for the Azimuth reference model"
+    doc: |
+      Annoy index generated for the
+      Azimuth reference model.
+      Annoy format.
+
+  seurat_rna_data_cloupe:
+    type: File?
+    outputSource: ctype_assign/seurat_rna_data_cloupe
+    label: "Seurat object in Loupe format"
+    doc: |
+      Seurat object.
+      RNA counts.
+      Loupe format.
+
+  pdf_plots:
+    type: File
+    outputSource: compress_pdf_plots/compressed_folder
+    label: "Compressed folder with all PDF plots"
+    doc: |
+      Compressed folder with all PDF plots.
+
+  sc_report_html_file:
+    type: File?
+    outputSource: ctype_assign/sc_report_html_file
+    label: "Analysis log"
+    doc: |
+      Tehcnical report.
+      HTML format.
+    "sd:visualPlugins":
+    - linkList:
+        tab: "Overview"
+        target: "_blank"
+
+  ctype_assign_human_log:
+    type: File
+    outputSource: ctype_assign/human_log
+    label: "Human readable error log"
+    doc: |
+      Human readable error log
+      from the ctype_assign step.
 
   ctype_assign_stdout_log:
     type: File
     outputSource: ctype_assign/stdout_log
-    label: "stdout log generated by ctype_assign step"
+    label: "Output log"
     doc: |
-      stdout log generated by ctype_assign step
+      Stdout log from the ctype_assign step.
 
   ctype_assign_stderr_log:
     type: File
     outputSource: ctype_assign/stderr_log
-    label: "stderr log generated by ctype_assign step"
+    label: "Error log"
     doc: |
-      stderr log generated by ctype_assign step
+      Stderr log from the ctype_assign step.
 
 
 steps:
@@ -690,22 +800,52 @@ steps:
     in:
       query_data_rds: query_data_rds
       cell_type_data: cell_type_data
+      barcodes_data: barcodes_data
       query_source_column:
         source: [query_reduction, query_resolution]
         valueFrom: $(get_query_column("", self[0], self[1]))
       query_target_column:
         source: [query_reduction, query_resolution]
         valueFrom: $(get_query_column("custom_", self[0], self[1]))
+      query_splitby_column:
+        source: query_splitby_column
+        valueFrom: |
+          ${
+            if (self == "dataset") {
+              return "new.ident";
+            } else if (self == "condition") {
+              return "condition";
+            } else {
+              return null;
+            }
+          }
+      reduction:
+        source: query_reduction
+        valueFrom: |
+          ${
+            if (self == "RNA") {
+              return "rnaumap";
+            } else if (self == "ATAC") {
+              return "atacumap";
+            } else {
+              return "wnnumap";
+            }
+          }
       atac_fragments_file: atac_fragments_file
       genes_of_interest:
         source: genes_of_interest
         valueFrom: $(split_features(self))
+      genesets_data: genesets_data
       identify_diff_genes: identify_diff_genes
       identify_diff_peaks: identify_diff_peaks
-      rna_minimum_logfc: rna_minimum_logfc
-      rna_minimum_pct: rna_minimum_pct
-      atac_minimum_logfc: atac_minimum_logfc
-      atac_minimum_pct: atac_minimum_pct
+      rna_minimum_logfc:
+        default: 0.25
+      rna_minimum_pct:
+        default: 0.1
+      atac_minimum_logfc:
+        default: 0.25
+      atac_minimum_pct:
+        default: 0.05
       only_positive_diff_genes:
         default: true
       rna_test_to_use: 
@@ -714,60 +854,85 @@ steps:
         default: LR
       verbose:
         default: true
+      export_azimuth_ref:
+        default: true
       export_ucsc_cb:
+        default: true
+      export_scope_data:
+        default: true
+      export_loupe_data: export_loupe_data
+      export_pdf_plots:
         default: true
       color_theme: color_theme
       parallel_memory_limit:
-        source: parallel_memory_limit
-        valueFrom: $(parseInt(self))
+        default: 32
       vector_memory_limit:
-        source: vector_memory_limit
-        valueFrom: $(parseInt(self))
+        default: 128
+      export_html_report: export_html_report
       threads:
         source: threads
         valueFrom: $(parseInt(self))
     out:
-    - umap_rd_rnaumap_plot_png
-    - umap_rd_atacumap_plot_png
-    - umap_rd_wnnumap_plot_png
-    - umap_spl_idnt_rd_rnaumap_plot_png
-    - umap_spl_idnt_rd_atacumap_plot_png
-    - umap_spl_idnt_rd_wnnumap_plot_png
-    - umap_spl_cnd_rd_rnaumap_plot_png
-    - umap_spl_cnd_rd_atacumap_plot_png
-    - umap_spl_cnd_rd_wnnumap_plot_png
-    - umap_spl_ph_rd_rnaumap_plot_png
-    - umap_spl_ph_rd_atacumap_plot_png
-    - umap_spl_ph_rd_wnnumap_plot_png
+    - cell_cnts_gr_ctyp_plot_png
+    - gene_umi_spl_ctyp_plot_png
+    - umi_mito_spl_ctyp_plot_png
+    - rnadbl_gr_ctyp_plot_png
+    - tss_frgm_spl_ctyp_plot_png
+    - atacdbl_gr_ctyp_plot_png
+    - rna_atac_cnts_spl_ctyp_plot_png
+    - vrlpdbl_gr_ctyp_plot_png
+    - qc_mtrcs_dnst_gr_ctyp_plot_png
+    - umap_gr_ctyp_plot_png
+    - umap_gr_ctyp_spl_idnt_plot_png
     - cmp_gr_ctyp_spl_idnt_plot_png
-    - cmp_gr_idnt_spl_ctyp_plot_png
+    - umap_gr_ph_spl_idnt_plot_png
     - cmp_gr_ph_spl_idnt_plot_png
+    - umap_gr_ctyp_spl_ph_png
+    - cmp_gr_ph_spl_ctyp_png
+    - umap_gr_ctyp_spl_cnd_plot_png
     - cmp_gr_ctyp_spl_cnd_plot_png
-    - cmp_gr_cnd_spl_ctyp_plot_png
-    - cmp_gr_ph_spl_ctyp_plot_png
+    - umap_gr_ph_spl_cnd_plot_png
+    - cmp_gr_ph_spl_cnd_plot_png
+    - gse_per_cell_plot_png
+    - gse_avg_plot_png
+    - gse_dnst_plot_png
     - xpr_avg_plot_png
+    - xpr_per_cell_plot_png
     - xpr_dnst_plot_png
-    - xpr_per_cell_rd_rnaumap_plot_png
-    - xpr_per_cell_rd_atacumap_plot_png
-    - xpr_per_cell_rd_wnnumap_plot_png
-    - xpr_per_cell_sgnl_rd_rnaumap_plot_png
-    - xpr_per_cell_sgnl_rd_atacumap_plot_png
-    - xpr_per_cell_sgnl_rd_wnnumap_plot_png
-    - cvrg_plot_png
     - xpr_htmp_plot_png
+    - cvrg_plot_png
+    - all_plots_pdf
+    - xpr_htmp_tsv
     - gene_markers_tsv
     - peak_markers_tsv
-    - ucsc_cb_config_data
     - ucsc_cb_html_data
     - ucsc_cb_html_file
     - seurat_data_rds
+    - seurat_data_scope
+    - reference_data_rds
+    - reference_data_index
+    - seurat_rna_data_cloupe
+    - sc_report_html_file
+    - human_log
     - stdout_log
     - stderr_log
 
-  compress_cellbrowser_config_data:
+  folder_pdf_plots:
+    run: ../tools/files-to-folder.cwl
+    in:
+      input_files:
+        source:
+        - ctype_assign/all_plots_pdf
+        valueFrom: $(self.flat().filter(n => n))
+      folder_basename:
+        default: "pdf_plots"
+    out:
+    - folder
+
+  compress_pdf_plots:
     run: ../tools/tar-compress.cwl
     in:
-      folder_to_compress: ctype_assign/ucsc_cb_config_data
+      folder_to_compress: folder_pdf_plots/folder
     out:
     - compressed_folder
 
@@ -778,9 +943,9 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-label: "Single-cell Manual Cell Type Assignment"
-s:name: "Single-cell Manual Cell Type Assignment"
-s:alternateName: "Assigns cell types for clusters based on the provided metadata file"
+label: "Single-Cell Manual Cell Type Assignment"
+s:name: "Single-Cell Manual Cell Type Assignment"
+s:alternateName: "Single-Cell Manual Cell Type Assignment"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows-datirium/master/workflows/sc-ctype-assign.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows-datirium
@@ -818,6 +983,18 @@ s:creator:
 
 
 doc: |
-  Single-cell Manual Cell Type Assignment
+  Single-Cell Manual Cell Type Assignment
 
-  Assigns cell types for clusters based on the provided metadata file.
+  Assigns identities to cells clustered with any of the “Single-Cell
+  Cluster Analysis” pipelines. For “Single-Cell RNA-Seq Cluster
+  Analysis” the results of this workflow are used in the “Single-Cell
+  RNA-Seq Differential Expression Analysis”, “Single-Cell RNA-Seq
+  Trajectory Analysis”, and — when combined with outputs from the
+  “Cell Ranger Count (RNA+VDJ)” or “Cell Ranger Aggregate (RNA, RNA+VDJ)”
+  workflow — in the “Single-Cell Immune Profiling Analysis” pipeline.
+  For “Single-Cell ATAC-Seq Cluster Analysis”, the results of this
+  workflow are used in the “Single-Cell ATAC-Seq Differential
+  Accessibility Analysis” and “Single-Cell ATAC-Seq Genome Coverage”
+  pipelines. For “Single-Cell WNN Cluster Analysis”, the results of
+  this workflow are used in all of the above, except the “Single-Cell
+  Immune Profiling Analysis” pipeline.

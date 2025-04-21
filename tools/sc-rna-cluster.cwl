@@ -11,7 +11,7 @@ requirements:
 
 hints:
 - class: DockerRequirement
-  dockerPull: biowardrobe2/sc-tools:v0.0.21
+  dockerPull: biowardrobe2/sc-tools:v0.0.41
 
 
 inputs:
@@ -26,19 +26,14 @@ inputs:
       dimensionality reductions applied to that assay.
 
   dimensions:
-    type:
-    - "null"
-    - int
-    - int[]
+    type: int?
     inputBinding:
       prefix: "--dimensions"
     doc: |
-      Dimensionality to use when constructing nearest-
-      neighbor graph before clustering (from 1 to 50). If
-      single value N is provided, use from 1 to N
-      dimensions. If multiple values are provided, subset to
-      only selected dimensions.
-      Default: from 1 to 10
+      Dimensionality to use when constructing nearest-neighbor
+      graph before clustering (from 1 to 50). Set to 0 to use
+      auto-estimated dimensionality.
+      Default: 10
 
   cluster_metric:
     type:
@@ -94,6 +89,17 @@ inputs:
     doc: |
       Genes of interest to build genes expression plots.
       Default: None
+
+  genesets_data:
+    type: File?
+    inputBinding:
+      prefix: "--genesets"
+    doc: |
+      Path to the GMT file for calculating average expression levels
+      (module scores) per gene set. This file can be downloaded from
+      the Molecular Signatures Database (MSigDB) following the link
+      https://www.gsea-msigdb.org/gsea/msigdb.
+      Default: do not calculate gene set expression scores.
 
   identify_diff_genes:
     type: boolean?
@@ -204,7 +210,17 @@ inputs:
     inputBinding:
       prefix: "--h5ad"
     doc: |
-      Save Seurat data to h5ad file.
+      Save raw counts from the RNA assay to h5ad file.
+      Default: false
+
+  export_loupe_data:
+    type: boolean?
+    inputBinding:
+      prefix: "--loupe"
+    doc: |
+      Save raw counts from the RNA assay to Loupe file. By
+      enabling this feature you accept the End-User License
+      Agreement available at https://10xgen.com/EULA.
       Default: false
 
   export_scope_data:
@@ -221,6 +237,14 @@ inputs:
       prefix: "--cbbuild"
     doc: |
       Export results to UCSC Cell Browser. Default: false
+
+  export_html_report:
+    type: boolean?
+    default: false
+    doc: |
+      Export tehcnical report. HTML format.
+      Note, stdout will be less informative.
+      Default: false
 
   output_prefix:
     type: string?
@@ -254,74 +278,158 @@ inputs:
       Number of cores/cpus to use.
       Default: 1
 
+  seed:
+    type: int?
+    inputBinding:
+      prefix: "--seed"
+    doc: |
+      Seed number for random values.
+      Default: 42
+
 
 outputs:
 
-  umap_res_plot_png:
+  cell_cnts_gr_clst_res_plot_png:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_umap_res_*.png"
+      glob: "*_cell_cnts_gr_clst_res_*.png"
     doc: |
-      Clustered cells UMAP.
-      PNG format
+      Number of cells per cluster.
+      All cells; all resolutions.
+      PNG format.
 
-  umap_res_plot_pdf:
+  gene_umi_spl_clst_res_plot_png:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_umap_res_*.pdf"
+      glob: "*_gene_umi_spl_clst_res_*.png"
     doc: |
-      Clustered cells UMAP.
-      PDF format
+      Genes vs RNA reads per cell.
+      Split by cluster; all cells;
+      all resolutions.
+      PNG format.
 
-  slh_res_plot_png:
+  umi_mito_spl_clst_res_plot_png:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_slh_res_*.png"
+      glob: "*_umi_mito_spl_clst_res_*.png"
     doc: |
-      Silhouette scores. Downsampled to max 500 cells per cluster.
-      PNG format
+      RNA reads vs mitochondrial % per cell.
+      Split by cluster; all cells; all
+      resolutions.
+      PNG format.
 
-  slh_res_plot_pdf:
+  rnadbl_gr_clst_res_plot_png:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_slh_res_*.pdf"
+      glob: "*_rnadbl_gr_clst_res_*.png"
     doc: |
-      Silhouette scores. Downsampled to max 500 cells per cluster.
-      PDF format
+      Percentage of RNA doublets per cluster.
+      All cells; all resolutions.
+      PNG format.
 
-  umap_spl_idnt_res_plot_png:
+  qc_mtrcs_dnst_gr_clst_res_plot_png:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_umap_spl_idnt_res_*.png"
+      glob: "*_qc_mtrcs_dnst_gr_clst_res_*.png"
     doc: |
-      Split by dataset clustered cells UMAP.
-      PNG format
+      Distribution of QC metrics per cell
+      colored by cluster.
+      All cells; all resolutions.
+      PNG format.
 
-  umap_spl_idnt_res_plot_pdf:
+  umap_gr_ph_spl_idnt_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_umap_gr_ph_spl_idnt.png"
+    doc: |
+      UMAP colored by cell cycle phase.
+      Split by dataset; downsampled to the
+      smallest dataset.
+      PNG format.
+
+  cmp_gr_ph_spl_idnt_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_cmp_gr_ph_spl_idnt.png"
+    doc: |
+      Composition plot colored by cell cycle phase.
+      Split by dataset; downsampled to the smallest
+      dataset.
+      PNG format.
+
+  umap_gr_ph_spl_cnd_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_umap_gr_ph_spl_cnd.png"
+    doc: |
+      UMAP colored by cell cycle phase.
+      Split by grouping condition; first downsampled
+      to the smallest dataset, then downsampled to
+      the smallest group.
+      PNG format.
+
+  cmp_gr_ph_spl_cnd_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_cmp_gr_ph_spl_cnd.png"
+    doc: |
+      Composition plot colored by cell cycle phase.
+      Split by grouping condition; first downsampled
+      to the smallest dataset, then downsampled to
+      the smallest group.
+      PNG format.
+
+  umap_gr_clst_res_plot_png:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_umap_spl_idnt_res_*.pdf"
+      glob: "*_umap_gr_clst_res_*.png"
     doc: |
-      Split by dataset clustered cells UMAP.
-      PDF format
+      UMAP colored by cluster.
+      All cells; all resolutions.
+      PNG format.
+
+  slh_gr_clst_res_plot_png:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_slh_gr_clst_res_*.png"
+    doc: |
+      Silhouette scores.
+      All cells; all resolutions.
+      PNG format.
+
+  umap_gr_clst_spl_idnt_res_plot_png:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_umap_gr_clst_spl_idnt_res_*.png"
+    doc: |
+      UMAP colored by cluster.
+      Split by dataset; downsampled to the
+      smallest dataset; all resolutions.
+      PNG format.
 
   cmp_gr_clst_spl_idnt_res_plot_png:
     type:
@@ -331,19 +439,10 @@ outputs:
     outputBinding:
       glob: "*_cmp_gr_clst_spl_idnt_res_*.png"
     doc: |
-      Grouped by cluster split by dataset cells composition plot. Downsampled.
-      PNG format
-
-  cmp_gr_clst_spl_idnt_res_plot_pdf:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputBinding:
-      glob: "*_cmp_gr_clst_spl_idnt_res_*.pdf"
-    doc: |
-      Grouped by cluster split by dataset cells composition plot. Downsampled.
-      PDF format
+      Composition plot colored by cluster.
+      Split by dataset; downsampled to the
+      smallest dataset; all resolutions.
+      PNG format.
 
   cmp_gr_idnt_spl_clst_res_plot_png:
     type:
@@ -353,123 +452,25 @@ outputs:
     outputBinding:
       glob: "*_cmp_gr_idnt_spl_clst_res_*.png"
     doc: |
-      Grouped by dataset split by cluster cells composition plot. Downsampled.
-      PNG format
+      Composition plot colored by dataset.
+      Split by cluster; downsampled to the
+      smallest dataset; all resolutions.
+      PNG format.
 
-  cmp_gr_idnt_spl_clst_res_plot_pdf:
+  umap_gr_clst_spl_ph_res_plot_png:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_cmp_gr_idnt_spl_clst_res_*.pdf"
+      glob: "*_umap_gr_clst_spl_ph_res_*.png"
     doc: |
-      Grouped by dataset split by cluster cells composition plot. Downsampled.
-      PDF format
-
-  umap_spl_cnd_res_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputBinding:
-      glob: "*_umap_spl_cnd_res_*.png"
-    doc: |
-      Split by grouping condition clustered cells UMAP.
-      PNG format
-
-  umap_spl_cnd_res_plot_pdf:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputBinding:
-      glob: "*_umap_spl_cnd_res_*.pdf"
-    doc: |
-      Split by grouping condition clustered cells UMAP.
-      PDF format
-
-  cmp_gr_clst_spl_cnd_res_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputBinding:
-      glob: "*_cmp_gr_clst_spl_cnd_res_*.png"
-    doc: |
-      Grouped by cluster split by condition cells composition plot. Downsampled.
-      PNG format
-
-  cmp_gr_clst_spl_cnd_res_plot_pdf:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputBinding:
-      glob: "*_cmp_gr_clst_spl_cnd_res_*.pdf"
-    doc: |
-      Grouped by cluster split by condition cells composition plot. Downsampled.
-      PDF format
-
-  cmp_gr_cnd_spl_clst_res_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputBinding:
-      glob: "*_cmp_gr_cnd_spl_clst_res_*.png"
-    doc: |
-      Grouped by condition split by cluster cells composition plot. Downsampled.
-      PNG format
-
-  cmp_gr_cnd_spl_clst_res_plot_pdf:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputBinding:
-      glob: "*_cmp_gr_cnd_spl_clst_res_*.pdf"
-    doc: |
-      Grouped by condition split by cluster cells composition plot. Downsampled.
-      PDF format
-
-  umap_spl_ph_res_plot_png:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputBinding:
-      glob: "*_umap_spl_ph_res_*.png"
-    doc: |
-      Split by cell cycle phase clustered cells UMAP.
-      PNG format
-
-  umap_spl_ph_res_plot_pdf:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputBinding:
-      glob: "*_umap_spl_ph_res_*.pdf"
-    doc: |
-      Split by cell cycle phase clustered cells UMAP.
-      PDF format
-
-  cmp_gr_ph_spl_idnt_plot_png:
-    type: File?
-    outputBinding:
-      glob: "*_cmp_gr_ph_spl_idnt.png"
-    doc: |
-      Grouped by cell cycle phase split by dataset cells composition plot. Downsampled.
-      PNG format
-
-  cmp_gr_ph_spl_idnt_plot_pdf:
-    type: File?
-    outputBinding:
-      glob: "*_cmp_gr_ph_spl_idnt.pdf"
-    doc: |
-      Grouped by cell cycle phase split by dataset cells composition plot. Downsampled.
-      PDF format
+      UMAP colored by cluster.
+      Split by cell cycle phase; downsampled
+      to the smallest dataset (if multiple
+      datasets are analyzed jointly); all
+      resolutions.
+      PNG format.
 
   cmp_gr_ph_spl_clst_res_plot_png:
     type:
@@ -479,41 +480,85 @@ outputs:
     outputBinding:
       glob: "*_cmp_gr_ph_spl_clst_res_*.png"
     doc: |
-      Grouped by cell cycle phase split by cluster cells composition plot. Downsampled.
-      PNG format
+      Composition plot colored by cell cycle phase.
+      Split by cluster; downsampled to the smallest
+      dataset (if multiple datasets are analyzed
+      jointly); all resolutions.
+      PNG format.
 
-  cmp_gr_ph_spl_clst_res_plot_pdf:
+  umap_gr_clst_spl_cnd_res_plot_png:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_cmp_gr_ph_spl_clst_res_*.pdf"
+      glob: "*_umap_gr_clst_spl_cnd_res_*.png"
     doc: |
-      Grouped by cell cycle phase split by cluster cells composition plot. Downsampled.
-      PDF format
+      UMAP colored by cluster.
+      Split by grouping condition; first downsampled
+      to the smallest dataset, then downsampled to
+      the smallest group; all resolutions.
+      PNG format.
 
-  xpr_avg_res_plot_png:
+  cmp_gr_clst_spl_cnd_res_plot_png:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_xpr_avg_res_*.png"
+      glob: "*_cmp_gr_clst_spl_cnd_res_*.png"
     doc: |
-      Log normalized scaled average gene expression per cluster.
-      PNG format
+      Composition plot colored by cluster.
+      Split by grouping condition; first downsampled
+      to the smallest dataset, then downsampled to
+      the smallest group; all resolutions.
+      PNG format.
 
-  xpr_avg_res_plot_pdf:
+  cmp_gr_cnd_spl_clst_res_plot_png:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_xpr_avg_res_*.pdf"
+      glob: "*_cmp_gr_cnd_spl_clst_res_*.png"
     doc: |
-      Log normalized scaled average gene expression per cluster.
-      PDF format
+      Composition plot colored by grouping condition.
+      Split by cluster; first downsampled to the
+      smallest dataset, then downsampled to the
+      smallest group; all resolutions.
+      PNG format.
+
+  gse_per_cell_plot_png:
+    type: File?
+    outputBinding:
+      glob: "*_gse_per_cell.png"
+    doc: |
+      UMAP colored by gene set expression score.
+      PNG format.
+
+  gse_avg_res_plot_png:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_gse_avg_res_*.png"
+    doc: |
+      Average gene set expression score.
+      All resolutions.
+      PNG format.
+
+  gse_dnst_res_plot_png:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_gse_dnst_res_*.png"
+    doc: |
+      Gene set expression score density.
+      All resolutions.
+      PNG format.
 
   xpr_per_cell_plot_png:
     type:
@@ -523,19 +568,9 @@ outputs:
     outputBinding:
       glob: "*_xpr_per_cell_[!sgnl_]*.png"
     doc: |
-      Log normalized gene expression on cells UMAP.
-      PNG format
-
-  xpr_per_cell_plot_pdf:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputBinding:
-      glob: "*_xpr_per_cell_[!sgnl_]*.pdf"
-    doc: |
-      Log normalized gene expression on cells UMAP.
-      PDF format
+      UMAP colored by gene expression.
+      All genes of interest.
+      PNG format.
 
   xpr_per_cell_sgnl_plot_png:
     type:
@@ -545,19 +580,21 @@ outputs:
     outputBinding:
       glob: "*_xpr_per_cell_sgnl_*.png"
     doc: |
-      Log normalized gene expression density on cells UMAP.
-      PNG format
+      UMAP colored by gene expression density.
+      All genes of interest.
+      PNG format.
 
-  xpr_per_cell_sgnl_plot_pdf:
+  xpr_avg_res_plot_png:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_xpr_per_cell_sgnl_*.pdf"
+      glob: "*_xpr_avg_res_*.png"
     doc: |
-      Log normalized gene expression density on cells UMAP.
-      PDF format
+      Average gene expression.
+      All resolutions.
+      PNG format.
 
   xpr_dnst_res_plot_png:
     type:
@@ -567,19 +604,9 @@ outputs:
     outputBinding:
       glob: "*_xpr_dnst_res_*.png"
     doc: |
-      Log normalized gene expression density per cluster.
-      PNG format
-
-  xpr_dnst_res_plot_pdf:
-    type:
-    - "null"
-    - type: array
-      items: File
-    outputBinding:
-      glob: "*_xpr_dnst_res_*.pdf"
-    doc: |
-      Log normalized gene expression density per cluster.
-      PDF format
+      Gene expression density.
+      All resolutions.
+      PNG format.
 
   xpr_htmp_res_plot_png:
     type:
@@ -589,76 +616,111 @@ outputs:
     outputBinding:
       glob: "*_xpr_htmp_res_*.png"
     doc: |
-      Normalized gene expression heatmap grouped by cluster.
-      PNG format
+      Gene expression heatmap.
+      Top gene markers; all resolutions.
+      PNG format.
 
-  xpr_htmp_res_plot_pdf:
+  all_plots_pdf:
     type:
     - "null"
     - type: array
       items: File
     outputBinding:
-      glob: "*_xpr_htmp_res_*.pdf"
+      glob: "*.pdf"
     doc: |
-      Normalized gene expression heatmap grouped by cluster.
-      PDF format
+      All generated plots.
+      PDF format.
+
+  xpr_htmp_res_tsv:
+    type:
+    - "null"
+    - type: array
+      items: File
+    outputBinding:
+      glob: "*_xpr_htmp_res_*.tsv"
+    doc: |
+      Gene expression heatmap.
+      Top gene markers; all resolutions.
+      TSV format.
 
   gene_markers_tsv:
     type: File?
     outputBinding:
       glob: "*_gene_markers.tsv"
     doc: |
-      Differentially expressed genes between each pair of clusters for all resolutions.
-      TSV format
+      Gene markers.
+      All resolutions.
+      TSV format.
 
   ucsc_cb_config_data:
     type: Directory?
     outputBinding:
       glob: "*_cellbrowser"
     doc: |
-      Directory with UCSC Cellbrowser configuration data.
+      UCSC Cell Browser configuration data.
 
   ucsc_cb_html_data:
     type: Directory?
     outputBinding:
       glob: "*_cellbrowser/html_data"
     doc: |
-      Directory with UCSC Cellbrowser html data.
+      UCSC Cell Browser html data.
 
   ucsc_cb_html_file:
     type: File?
     outputBinding:
       glob: "*_cellbrowser/html_data/index.html"
     doc: |
-      HTML index file from the directory with UCSC Cellbrowser html data.
+      UCSC Cell Browser html index.
 
   seurat_data_rds:
     type: File
     outputBinding:
       glob: "*_data.rds"
     doc: |
-      Reduced Seurat data in RDS format
+      Seurat object.
+      RDS format.
 
   seurat_data_h5seurat:
     type: File?
     outputBinding:
       glob: "*_data.h5seurat"
     doc: |
-      Reduced Seurat data in h5seurat format
+      Seurat object.
+      h5Seurat format.
 
   seurat_data_h5ad:
     type: File?
     outputBinding:
-      glob: "*_data.h5ad"
+      glob: "*_counts.h5ad"
     doc: |
-      Reduced Seurat data in h5ad format
+      Seurat object.
+      H5AD format.
+
+  seurat_data_cloupe:
+    type: File?
+    outputBinding:
+      glob: "*_counts.cloupe"
+    doc: |
+      Seurat object.
+      Loupe format.
 
   seurat_data_scope:
     type: File?
     outputBinding:
       glob: "*_data.loom"
     doc: |
-      Reduced Seurat data in SCope compatible loom format
+      Seurat object.
+      SCope compatible.
+      Loom format.
+
+  sc_report_html_file:
+    type: File?
+    outputBinding:
+      glob: "sc_report.html"
+    doc: |
+      Tehcnical report.
+      HTML format.
 
   stdout_log:
     type: stdout
@@ -667,7 +729,9 @@ outputs:
     type: stderr
 
 
-baseCommand: ["sc_rna_cluster.R"]
+baseCommand: ["Rscript"]
+arguments:
+- valueFrom: $(inputs.export_html_report?["/usr/local/bin/sc_report_wrapper.R", "/usr/local/bin/sc_rna_cluster.R"]:"/usr/local/bin/sc_rna_cluster.R")
 
 stdout: sc_rna_cluster_stdout.log
 stderr: sc_rna_cluster_stderr.log
@@ -680,8 +744,8 @@ $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
 
-label: "Single-cell RNA-Seq Cluster Analysis"
-s:name: "Single-cell RNA-Seq Cluster Analysis"
+label: "Single-Cell RNA-Seq Cluster Analysis"
+s:name: "Single-Cell RNA-Seq Cluster Analysis"
 s:alternateName: "Clusters single-cell RNA-Seq datasets, identifies gene markers"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/sc-rna-cluster.cwl
@@ -720,25 +784,30 @@ s:creator:
 
 
 doc: |
-  Single-cell RNA-Seq Cluster Analysis
+  Single-Cell RNA-Seq Cluster Analysis
 
   Clusters single-cell RNA-Seq datasets, identifies gene markers.
 
 
 s:about: |
-  usage: sc_rna_cluster.R
-        [-h] --query QUERY [--dimensions [DIMENSIONS [DIMENSIONS ...]]]
-        [--ametric {euclidean,cosine,manhattan,hamming}]
-        [--algorithm {louvain,mult-louvain,slm,leiden}]
-        [--resolution [RESOLUTION [RESOLUTION ...]]]
-        [--genes [GENES [GENES ...]]] [--diffgenes] [--logfc LOGFC]
-        [--minpct MINPCT] [--onlypos]
-        [--testuse {wilcox,bimod,roc,t,negbinom,poisson,LR,MAST,DESeq2}]
-        [--pdf] [--verbose] [--h5seurat] [--h5ad] [--cbbuild] [--output OUTPUT]
-        [--theme {gray,bw,linedraw,light,dark,minimal,classic,void}]
-        [--cpus CPUS] [--memory MEMORY]
+  usage: /usr/local/bin/sc_rna_cluster.R [-h] --query QUERY
+                                        [--dimensions DIMENSIONS]
+                                        [--ametric {euclidean,cosine,manhattan,hamming}]
+                                        [--algorithm {louvain,mult-louvain,slm,leiden}]
+                                        [--resolution [RESOLUTION [RESOLUTION ...]]]
+                                        [--genes [GENES [GENES ...]]]
+                                        [--genesets GENESETS] [--diffgenes]
+                                        [--logfc LOGFC] [--minpct MINPCT]
+                                        [--onlypos]
+                                        [--testuse {wilcox,bimod,roc,t,negbinom,poisson,LR,MAST,DESeq2}]
+                                        [--pdf] [--verbose] [--h5seurat]
+                                        [--h5ad] [--loupe] [--cbbuild]
+                                        [--scope] [--output OUTPUT]
+                                        [--theme {gray,bw,linedraw,light,dark,minimal,classic,void}]
+                                        [--cpus CPUS] [--memory MEMORY]
+                                        [--seed SEED]
 
-  Single-cell RNA-Seq Cluster Analysis
+  Single-Cell RNA-Seq Cluster Analysis
 
   optional arguments:
     -h, --help            show this help message and exit
@@ -747,12 +816,10 @@ s:about: |
                           stored in the RNA assay, as well as 'pca' and
                           'rnaumap' dimensionality reductions applied to that
                           assay.
-    --dimensions [DIMENSIONS [DIMENSIONS ...]]
+    --dimensions DIMENSIONS
                           Dimensionality to use when constructing nearest-
-                          neighbor graph before clustering (from 1 to 50). If
-                          single value N is provided, use from 1 to N
-                          dimensions. If multiple values are provided, subset to
-                          only selected dimensions. Default: from 1 to 10
+                          neighbor graph before clustering (from 1 to 50). Set
+                          to 0 to use auto-estimated dimensionality. Default: 10
     --ametric {euclidean,cosine,manhattan,hamming}
                           Distance metric used when constructing nearest-
                           neighbor graph before clustering. Default: euclidean
@@ -769,6 +836,12 @@ s:about: |
     --genes [GENES [GENES ...]]
                           Genes of interest to build genes expression plots.
                           Default: None
+    --genesets GENESETS   Path to the GMT file for calculating average
+                          expression levels (module scores) per gene set. This
+                          file can be downloaded from the Molecular Signatures
+                          Database (MSigDB) following the link https://www.gsea-
+                          msigdb.org/gsea/msigdb. Default: do not calculate gene
+                          set expression scores.
     --diffgenes           Identify differentially expressed genes (putative gene
                           markers) between each pair of clusters for all
                           resolutions. Default: false
@@ -792,11 +865,19 @@ s:about: |
     --pdf                 Export plots in PDF. Default: false
     --verbose             Print debug information. Default: false
     --h5seurat            Save Seurat data to h5seurat file. Default: false
-    --h5ad                Save Seurat data to h5ad file. Default: false
+    --h5ad                Save raw counts from the RNA assay to h5ad file.
+                          Default: false
+    --loupe               Save raw counts from the RNA assay to Loupe file. By
+                          enabling this feature you accept the End-User License
+                          Agreement available at https://10xgen.com/EULA.
+                          Default: false
     --cbbuild             Export results to UCSC Cell Browser. Default: false
+    --scope               Save Seurat data to SCope compatible loom file.
+                          Default: false
     --output OUTPUT       Output prefix. Default: ./sc
     --theme {gray,bw,linedraw,light,dark,minimal,classic,void}
                           Color theme for all generated plots. Default: classic
     --cpus CPUS           Number of cores/cpus to use. Default: 1
     --memory MEMORY       Maximum memory in GB allowed to be shared between the
                           workers when using multiple --cpus. Default: 32
+    --seed SEED           Seed number for random values. Default: 42

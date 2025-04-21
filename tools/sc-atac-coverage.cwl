@@ -11,7 +11,7 @@ requirements:
 
 hints:
 - class: DockerRequirement
-  dockerPull: biowardrobe2/sc-tools:v0.0.21
+  dockerPull: biowardrobe2/sc-tools:v0.0.41
 
 
 inputs:
@@ -88,6 +88,14 @@ inputs:
       Print debug information.
       Default: false
 
+  export_html_report:
+    type: boolean?
+    default: false
+    doc: |
+      Export tehcnical report. HTML format.
+      Note, stdout will be less informative.
+      Default: false
+
   output_prefix:
     type: string?
     inputBinding:
@@ -120,6 +128,14 @@ inputs:
       Number of cores/cpus to use.
       Default: 1
 
+  seed:
+    type: int?
+    inputBinding:
+      prefix: "--seed"
+    doc: |
+      Seed number for random values.
+      Default: 42
+
 
 outputs:
 
@@ -129,7 +145,7 @@ outputs:
       glob: "*_peaks.bigBed"
     doc: |
       Locations of open-chromatin regions ("peaks")
-      in bigBed format
+      in bigBed format.
 
   cut_sites_bigwig_file:
     type:
@@ -140,7 +156,7 @@ outputs:
       glob: "*_cut_cov.bigWig"
     doc: |
       Genome coverage calculated for Tn5 cut sites
-      in bigWig format
+      in bigWig format.
 
   fragments_bigwig_file:
     type:
@@ -150,8 +166,16 @@ outputs:
     outputBinding:
       glob: "*_frg_cov.bigWig"
     doc: |
-      Genome coverage calculated for fragments
-      in bigWig format
+      Genome coverage calculated for ATAC fragments
+      in bigWig format.
+
+  sc_report_html_file:
+    type: File?
+    outputBinding:
+      glob: "sc_report.html"
+    doc: |
+      Tehcnical report.
+      HTML format.
 
   stdout_log:
     type: stdout
@@ -160,7 +184,10 @@ outputs:
     type: stderr
 
 
-baseCommand: ["sc_atac_coverage.R"]
+baseCommand: ["Rscript"]
+arguments:
+- valueFrom: $(inputs.export_html_report?["/usr/local/bin/sc_report_wrapper.R", "/usr/local/bin/sc_atac_coverage.R"]:"/usr/local/bin/sc_atac_coverage.R")
+
 
 stdout: sc_atac_coverage_stdout.log
 stderr: sc_atac_coverage_stderr.log
@@ -173,9 +200,9 @@ $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
 
-label: "Single-cell ATAC-Seq Genome Coverage"
-s:name: "Single-cell ATAC-Seq Genome Coverage"
-s:alternateName: "Creates genome coverage bigWig files from the provided fragments file and selected grouping parameters"
+label: "Single-Cell ATAC-Seq Genome Coverage"
+s:name: "Single-Cell ATAC-Seq Genome Coverage"
+s:alternateName: "Creates genome coverage bigWig files from the provided ATAC fragments file and selected grouping parameters"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/sc-atac-coverage.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows
@@ -213,23 +240,27 @@ s:creator:
 
 
 doc: |
-  Single-cell ATAC-Seq Genome Coverage
+  Single-Cell ATAC-Seq Genome Coverage
 
-  Creates genome coverage bigWig files from the provided fragments file
+  Creates genome coverage bigWig files from the provided ATAC fragments file
   and selected grouping parameters.
 
   --tmpdir parameter is not exposed as input.
 
 
 s:about: |
-  usage: sc_atac_coverage.R
-        [-h] --query QUERY --fragments FRAGMENTS [--splitby [SPLITBY ...]]
-        [--metadata METADATA] [--barcodes BARCODES] [--flank FLANK] [--verbose]
-        [--tmpdir TMPDIR] [--output OUTPUT] [--cpus CPUS] [--memory MEMORY]
+  usage: /usr/local/bin/sc_atac_coverage.R [-h] --query QUERY --fragments
+                                          FRAGMENTS
+                                          [--splitby [SPLITBY [SPLITBY ...]]]
+                                          [--metadata METADATA]
+                                          [--barcodes BARCODES] [--flank FLANK]
+                                          [--verbose] [--tmpdir TMPDIR]
+                                          [--output OUTPUT] [--cpus CPUS]
+                                          [--memory MEMORY] [--seed SEED]
 
-  Single-cell ATAC-Seq Genome Coverage
+  Single-Cell ATAC-Seq Genome Coverage
 
-  options:
+  optional arguments:
     -h, --help            show this help message and exit
     --query QUERY         Path to the RDS file to load Seurat object from. This
                           file should include chromatin accessibility
@@ -239,7 +270,7 @@ s:about: |
                           Count and barcode information for every ATAC fragment
                           used in the loaded Seurat object. File should be saved
                           in TSV format and to be tbi-indexed.
-    --splitby [SPLITBY ...]
+    --splitby [SPLITBY [SPLITBY ...]]
                           Column from the Seurat object metadata to split cells
                           into groups. May be one of the columns added with
                           --metadata or --barcodes parameters. Default: split by
@@ -272,3 +303,4 @@ s:about: |
     --cpus CPUS           Number of cores/cpus to use. Default: 1
     --memory MEMORY       Maximum memory in GB allowed to be shared between the
                           workers when using multiple --cpus. Default: 32
+    --seed SEED           Seed number for random values. Default: 42

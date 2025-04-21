@@ -13,10 +13,12 @@ requirements:
 - class: InitialWorkDirRequirement
   listing: |
     ${
+      var grouping = "library_id\tcondition\n"
       if (inputs.molecule_info_h5 != null){
         var entry = "sample_id,molecule_h5\n"
         for (var i=0; i < inputs.molecule_info_h5.length; i++){
           entry += get_label(inputs.molecule_info_h5, i) + "," + inputs.molecule_info_h5[i].path + "\n"
+          grouping += get_label(inputs.molecule_info_h5, i) + "\t" + get_label(inputs.molecule_info_h5, i) + "\n"
         }
       } else if (inputs.filtered_data_folder != null){
         var entry = "sample_id,sample_outs,donor,origin\n"
@@ -30,21 +32,30 @@ requirements:
             origin = "origin_" + i
           }
           entry += get_label(inputs.filtered_data_folder, i) + "," + inputs.filtered_data_folder[i].path + "," + donor  + "," + origin + "\n"
+          grouping += get_label(inputs.filtered_data_folder, i) + "\t" + get_label(inputs.filtered_data_folder, i) + "\n"
         }
       } else {
         var entry = "neither molecule_info_h5 nor filtered_data_folder was provided"
+        var grouping = "neither molecule_info_h5 nor filtered_data_folder was provided"
       }
-      return [{
-        "entry": entry,
-        "entryname": "metadata.csv",
-        "writable": true
-      }];
+      return [
+        {
+          "entry": entry,
+          "entryname": "metadata.csv",
+          "writable": true
+        },
+        {
+          "entry": grouping,
+          "entryname": "grouping.tsv",
+          "writable": true
+        }
+      ];
     }
 
 
 hints:
 - class: DockerRequirement
-  dockerPull: cumulusprod/cellranger:7.0.0
+  dockerPull: cumulusprod/cellranger:8.0.1
 
 
 inputs:
@@ -165,14 +176,14 @@ outputs:
     outputBinding:
       glob: "aggregated/outs/count/summary.json"
     doc: |
-      Aggregated GEX run summary metrics in JSON format
+      Aggregated RNA run summary metrics in JSON format
   
   secondary_analysis_report_folder:
     type: Directory
     outputBinding:
       glob: "aggregated/outs/count/analysis"
     doc: |
-      Folder with secondary analysis of GEX data including dimensionality reduction,
+      Folder with secondary analysis of RNA data including dimensionality reduction,
       cell clustering, and differential expression
 
   filtered_feature_bc_matrix_folder:
@@ -198,12 +209,28 @@ outputs:
     doc: |
       Copy of the input aggregation CSV file
 
+  grouping_data:
+    type: File
+    outputBinding:
+      glob: "grouping.tsv"
+    doc: |
+      Example of TSV file to define datasets grouping
+
   loupe_browser_track:
     type: File
     outputBinding:
       glob: "aggregated/outs/count/cloupe.cloupe"
     doc: |
       Loupe Browser visualization and analysis file
+
+  airr_rearrangement_tsv:
+    type: File?
+    outputBinding:
+      glob: "aggregated/outs/vdj_*/airr_rearrangement.tsv"
+    doc: |
+      Annotated contigs and consensus sequences of V(D)J
+      rearrangements in the AIRR format. It includes only
+      viable cells identified by both V(D)J and RNA algorithms.
 
   clonotypes_csv:
     type: File?
@@ -262,11 +289,9 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-label: "Cell Ranger Aggregate"
-s:name: "Cell Ranger Aggregate"
-s:alternateName: |
-  Aggregates outputs from multiple runs of Cell Ranger Count Gene Expression or
-  Cell Ranger Multi Gene Expression and V(D)J Repertoire Profiling experiments
+label: "Cell Ranger Aggregate (RNA, RNA+VDJ)"
+s:name: "Cell Ranger Aggregate (RNA, RNA+VDJ)"
+s:alternateName: "Combines outputs from multiple runs of either Cell Ranger Count (RNA) or Cell Ranger Count (RNA+VDJ) pipelines"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/cellranger-aggr.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows
@@ -304,14 +329,13 @@ s:creator:
 
 
 doc: |
-  Cell Ranger Aggregate
+  Cell Ranger Aggregate (RNA, RNA+VDJ)
 
-  Aggregates outputs from multiple runs of Cell Ranger Count Gene
-  Expression (if molecule_info_h5 input provided) or Cell Ranger
-  Multi Gene Expression and V(D)J Repertoire Profiling experiments
-  (if filtered_data_folder input provided). If both inputs are
-  provided - use molecule_info_h5. If neither of them was provided
-  cellranger aggr will fail.
+  Aggregates outputs from multiple runs of the "Cell Ranger Count
+  (RNA)" (if molecule_info_h5 input provided) or "Cell Ranger Count
+  (RNA+VDJ)" experiments (if filtered_data_folder input provided).
+  If both inputs are provided - uses molecule_info_h5. If neither of
+  them are provided cellranger aggr will fail.
 
   Parameters set by default:
   --disable-ui - no need in any UI when running in Docker container
@@ -321,6 +345,7 @@ doc: |
   Skipped parameters:
   --nosecondary
   --dry
+  --min-crispr-umi
   --noexit
   --nopreflight
   --description
@@ -329,9 +354,10 @@ doc: |
   --maxjobs
   --jobinterval
   --overrides
+  --output-dir
   --uiport
 
-  Not supported features when aggregating GEX experiments:
+  Not supported features when aggregating RNA experiments:
   - Batch correction caused by different versions of the Single Cell Gene
     Expression chemistry is not supported as the generated metadata file
     for merging molecule_info_h5 inputs doesn't include "batch" field.
@@ -340,29 +366,32 @@ doc: |
 s:about: |
   Aggregate data from multiple Cell Ranger runs
 
-  USAGE:
-      cellranger aggr [OPTIONS] --id <ID> --csv <CSV>
+  Usage: cellranger aggr [OPTIONS] --id <ID> --csv <CSV>
 
-  OPTIONS:
-      --id <ID>               A unique run id and output folder name [a-zA-Z0-9_-]+
-      --description <TEXT>    Sample description to embed in output files [default: ]
-      --csv <CSV>             Path of CSV file enumerating 'cellranger count/vdj/multi' outputs
-      --normalize <MODE>      Library depth normalization mode [default: mapped] [possible values: mapped, none]
-      --nosecondary           Disable secondary analysis, e.g. clustering
-      --dry                   Do not execute the pipeline. Generate a pipeline invocation (.mro) file and stop
-      --jobmode <MODE>        Job manager to use. Valid options: local (default), sge, lsf, slurm or path to a .template file. Search for help on "Cluster Mode" at
-                              support.10xgenomics.com for more details on configuring the pipeline to use a compute cluster [default: local]
-      --localcores <NUM>      Set max cores the pipeline may request at one time. Only applies to local jobs
-      --localmem <NUM>        Set max GB the pipeline may request at one time. Only applies to local jobs
-      --localvmem <NUM>       Set max virtual address space in GB for the pipeline. Only applies to local jobs
-      --mempercore <NUM>      Reserve enough threads for each job to ensure enough memory will be available, assuming each core on your cluster has at least this much memory
-                              available. Only applies to cluster jobmodes
-      --maxjobs <NUM>         Set max jobs submitted to cluster at one time. Only applies to cluster jobmodes
-      --jobinterval <NUM>     Set delay between submitting jobs to cluster, in ms. Only applies to cluster jobmodes
-      --overrides <PATH>      The path to a JSON file that specifies stage-level overrides for cores and memory. Finer-grained than --localcores, --mempercore and --localmem.
-                              Consult https://support.10xgenomics.com/ for an example override file
-      --uiport <PORT>         Serve web UI at http://localhost:PORT
-      --disable-ui            Do not serve the web UI
-      --noexit                Keep web UI running after pipestance completes or fails
-      --nopreflight           Skip preflight checks
-      -h, --help                  Print help information
+  Options:
+        --id <ID>               A unique run id and output folder name [a-zA-Z0-9_-]+
+        --description <TEXT>    Sample description to embed in output files [default: ]
+        --csv <CSV>             Path of CSV file enumerating 'cellranger count/vdj/multi' outputs
+        --normalize <MODE>      Library depth normalization mode [default: mapped] [possible values: mapped, none]
+        --nosecondary           Disable secondary analysis, e.g. clustering
+        --dry                   Do not execute the pipeline. Generate a pipeline invocation (.mro) file and stop
+        --min-crispr-umi <NUM>  Minimum CRISPR UMI threshold [default: 3]
+        --jobmode <MODE>        Job manager to use. Valid options: local (default), sge, lsf, slurm or path to a .template file.
+                                Search for help on "Cluster Mode" at support.10xgenomics.com for more details on configuring the
+                                pipeline to use a compute cluster
+        --localcores <NUM>      Set max cores the pipeline may request at one time. Only applies to local jobs
+        --localmem <NUM>        Set max GB the pipeline may request at one time. Only applies to local jobs
+        --localvmem <NUM>       Set max virtual address space in GB for the pipeline. Only applies to local jobs
+        --mempercore <NUM>      Reserve enough threads for each job to ensure enough memory will be available, assuming each core
+                                on your cluster has at least this much memory available. Only applies to cluster jobmodes
+        --maxjobs <NUM>         Set max jobs submitted to cluster at one time. Only applies to cluster jobmodes
+        --jobinterval <NUM>     Set delay between submitting jobs to cluster, in ms. Only applies to cluster jobmodes
+        --overrides <PATH>      The path to a JSON file that specifies stage-level overrides for cores and memory. Finer-grained
+                                than --localcores, --mempercore and --localmem. Consult https://support.10xgenomics.com/ for an
+                                example override file
+        --output-dir <PATH>     Output the results to this directory
+        --uiport <PORT>         Serve web UI at http://localhost:PORT
+        --disable-ui            Do not serve the web UI
+        --noexit                Keep web UI running after pipestance completes or fails
+        --nopreflight           Skip preflight checks
+    -h, --help                  Print help

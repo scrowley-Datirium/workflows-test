@@ -8,7 +8,7 @@ requirements:
 
 hints:
 - class: DockerRequirement
-  dockerPull: robertplayer/scidap-kallisto:stable
+  dockerPull: scrowley1/scidap-kallisto:v1.0.0
 
 
 inputs:
@@ -27,11 +27,23 @@ inputs:
       printf "\$4 - $THREADS\n\n"
       # commands start
       kallisto quant -t $THREADS -i $INDEX -o quant_outdir $R1 $R2
-      # format output for as deseq upstream (e.g. rpkm_isoforms_cond_1, rpkm_genes_cond_1, rpkm_common_tss_cond_1), only using "genes" in this case
+      # format output for use as deseq upstream (e.g. rpkm_isoforms_cond_1, rpkm_genes_cond_1, rpkm_common_tss_cond_1), only using "genes" in this case
+      #   original file (works with standard deseq) - transcript_counts.tsv
+      #   reformatted file (for deseq multi-factor) - transcript_counts_mf.tsv
       # using kallisto's "est_counts" output (col4 in abundance.tsv) counts per transcript (as required/expect by deseq tool for diffexp analysis)
       printf "RefseqId\tGeneId\tChrom\tTxStart\tTxEnd\tStrand\tTotalReads\tRpkm\n" > transcript_counts.tsv
       #   force "est_counts" to integers
       awk -F'\t' '{if(NR==FNR){anno[$3]=$0}else{printf("%s\t%0.f\t%s\n",anno[$1],$4,$5)}}' $ANNO <(tail -n+2 ./quant_outdir/abundance.tsv) >> transcript_counts.tsv
+
+      # making reformatted file for deseq multi-factor (removing unannotated transcripts labeled as "na" for col1 [RefseqId] and col2 [GeneId] from the output count table)
+      printf "RefseqId\tGeneId\tChrom\tTxStart\tTxEnd\tStrand\tTotalReads\tRpkm\n" > transcript_counts_mf.tsv
+      tail -n+2 transcript_counts.tsv | grep -vP "^na\tna\t" >> transcript_counts_mf.tsv
+      # convert to csv or 'get_gene_n_tss.R'
+      sed 's/\t/,/g' transcript_counts_mf.tsv > transcript_counts_mf.csv
+      
+      # REMOVING THIS FOR NOW, REPLACING WITH 
+      # and if there are duplicate geneIds, only retain the one with the higher read count
+      #awk -F'\t' '{if(NR==FNR){if($7>=tr[$2]){c1[$2]=$1; c3[$2]=$3; c4[$2]=$4; c5[$2]=$5; c6[$2]=$6; tr[$2]=$7; rpkm[$2]=$8}}else{printf("%s\t%s\t%s\t%s\t%s\t%s\t%0.f\t%s\n",c1[$2],$2,c3[$2],c4[$2],c5[$2],c6[$2],tr[$2],rpkm[$2])}}' transcript_counts_mf.tmp transcript_counts_mf.tmp | sort | uniq >> transcript_counts_mf.tsv
 
       # print for overview.md
       #   read metrics
@@ -57,7 +69,11 @@ inputs:
 
       #   format for overview file
       printf "\n\n\tgenerating overview.md file...\n"
-      printf "#### INPUTS\n" > overview.md
+
+      printf "-" > overview.md
+      printf " NOTE: Unannotated transcripts are not shown in the gene expression tab, and will not be used in downstream differential expression analysis.\n" >> overview.md
+      printf "\n" >> overview.md
+      printf "#### INPUTS\n" >> overview.md
       printf "-" >> overview.md
       printf " \$INDEX, $INDEX\n" >> overview.md
       printf "-" >> overview.md
@@ -162,9 +178,16 @@ outputs:
   transcript_counts:
     type: File
     outputBinding:
+      glob: transcript_counts_mf.csv
+    doc: |
+      Gene expression table formatted for input into DESeq and DESeq multi factor. The na values for unannotated genes have been removed.
+
+  transcript_counts_standard:
+    type: File
+    outputBinding:
       glob: transcript_counts.tsv
     doc: |
-      Gene expression table formatted for input into DESeq
+      Gene expression table formatted for input into DESeq (contains na values where annotations are not found). This particular output works with standard deseq, the multi-factor output will be used for both.
 
   log_file_stdout:
     type: File
@@ -228,4 +251,10 @@ s:creator:
         - id: https://orcid.org/0000-0001-5872-259X
 
 doc: |
-    Tool indexes a reference genome fasta using `kallisto index`.
+  This tool quantitates RNA-Seq reads using the pseudo aligner Kallisto. Read counts are estimates.
+
+  ### __Data Analysis Steps__
+  1. cwl calls dockercontainer robertplayer/scidap-kallisto to pseudo align reads using `kallisto quant`
+  2. abundance tsv is merged with annotation data
+  3. rows are summed per unique GeneID, and resulting file formatted for use in differential expression analysis
+  4. read and alignment metrics are calculated for the sample piechart, and output to the overview.md file

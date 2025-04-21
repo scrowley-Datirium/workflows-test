@@ -17,13 +17,14 @@ requirements:
       };
 
 
-'sd:upstream':
+"sd:upstream":
   sc_tools_sample:
   - "sc-multiome-filter.cwl"
   - "sc-atac-reduce.cwl"
   - "sc-atac-cluster.cwl"
   - "sc-wnn-cluster.cwl"
   - "sc-ctype-assign.cwl"
+  - "sc-rna-azimuth.cwl"
   sc_atac_sample:
   - "cellranger-arc-count.cwl"
   - "cellranger-arc-aggr.cwl"
@@ -48,28 +49,32 @@ inputs:
       Path to the RDS file to load Seurat object from. This file
       should include chromatin accessibility information stored
       in the ATAC assay with a proper seqinfo data.
-    'sd:upstreamSource': "sc_tools_sample/seurat_data_rds"
-    'sd:localLabel': true
+    "sd:upstreamSource": "sc_tools_sample/seurat_data_rds"
+    "sd:localLabel": true
 
   atac_fragments_file:
     type: File
     secondaryFiles:
     - .tbi
-    label: "Cell Ranger ATAC/ARC Count/Aggregate Experiment"
+    label: "Cell Ranger ATAC or RNA+ATAC Sample"
     doc: |
-      Count and barcode information for every ATAC fragment used in the
-      loaded Seurat object. File should be saved in TSV format and to be
-      tbi-indexed.
-    'sd:upstreamSource': "sc_atac_sample/atac_fragments_file"
-    'sd:localLabel': true
+      Any "Cell Ranger ATAC or RNA+ATAC Sample"
+      for generating ATAC fragments coverage
+      files. This sample can be obtained from
+      one of the following pipelines: "Cell
+      Ranger Count (RNA+ATAC)", "Cell Ranger
+      Aggregate (RNA+ATAC)", "Cell Ranger Count
+      (ATAC)", or "Cell Ranger Aggregate (ATAC)".
+    "sd:upstreamSource": "sc_atac_sample/atac_fragments_file"
+    "sd:localLabel": true
 
   chrom_length_file:                                                         # not used - need it only for IGV
     type: File
     label: "Genome"
     doc: |
       Reference genome
-    'sd:upstreamSource': "genome_indices/chrom_length"
-    'sd:localLabel': true
+    "sd:upstreamSource": "genome_indices/chrom_length"
+    "sd:localLabel": true
 
   splitby:
     type: string?
@@ -109,36 +114,17 @@ inputs:
     doc: |
       Distance in bp to flank both start and end of the each fragment in both
       direction to generate cut sites coverage. Default: 5
-    'sd:layout':
+    "sd:layout":
       advanced: true
 
-  parallel_memory_limit:
-    type:
-    - "null"
-    - type: enum
-      symbols:
-      - "32"
-    default: "32"
-    label: "Maximum memory in GB allowed to be shared between the workers when using multiple CPUs"
+  export_html_report:
+    type: boolean?
+    default: true
+    label: "Show HTML report"
     doc: |
-      Maximum memory in GB allowed to be shared between the workers
-      when using multiple --cpus.
-      Forced to 32 GB
-    'sd:layout':
-      advanced: true
-
-  vector_memory_limit:
-    type:
-    - "null"
-    - type: enum
-      symbols:
-      - "64"
-    default: "64"
-    label: "Maximum vector memory in GB allowed to be used by R"
-    doc: |
-      Maximum vector memory in GB allowed to be used by R.
-      Forced to 64 GB
-    'sd:layout':
+      Export tehcnical report in HTML format.
+      Default: true
+    "sd:layout":
       advanced: true
 
   threads:
@@ -147,12 +133,19 @@ inputs:
     - type: enum
       symbols:
       - "1"
-    default: "1"
+      - "2"
+      - "3"
+      - "4"
+      - "5"
+      - "6"
+    default: "4"
     label: "Number of cores/cpus to use"
     doc: |
-      Number of cores/cpus to use
-      Forced to 1
-    'sd:layout':
+      Parallelization parameter to define the
+      number of cores/CPUs that can be utilized
+      simultaneously.
+      Default: 4
+    "sd:layout":
       advanced: true
 
 
@@ -165,12 +158,12 @@ outputs:
     doc: |
       Locations of open-chromatin regions ("peaks")
       in bigBed format
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'Genome Browser'
-        id: 'igvbrowser'
-        type: 'annotation'
-        format: 'bigbed'
+        tab: "Genome Browser"
+        id: "igvbrowser"
+        type: "annotation"
+        format: "bigbed"
         name: "Peaks"
         height: 40
 
@@ -184,11 +177,11 @@ outputs:
     doc: |
       Genome coverage calculated for Tn5 cut sites
       in bigWig format
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'Genome Browser'
-        id: 'igvbrowser'
-        type: 'wig'
+        tab: "Genome Browser"
+        id: "igvbrowser"
+        type: "wig"
         name: "Cut sites coverage"
         height: 120
 
@@ -198,17 +191,29 @@ outputs:
     - type: array
       items: File
     outputSource: sc_atac_coverage/fragments_bigwig_file
-    label: "Genome coverage for fragments"
+    label: "Genome coverage for ATAC fragments"
     doc: |
-      Genome coverage calculated for fragments
+      Genome coverage calculated for ATAC fragments
       in bigWig format
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - igvbrowser:
-        tab: 'Genome Browser'
-        id: 'igvbrowser'
-        type: 'wig'
-        name: "Fragments coverage"
+        tab: "Genome Browser"
+        id: "igvbrowser"
+        type: "wig"
+        name: "ATAC fragments coverage"
         height: 120
+
+  sc_report_html_file:
+    type: File?
+    outputSource: sc_atac_coverage/sc_report_html_file
+    label: "Analysis log"
+    doc: |
+      Tehcnical report.
+      HTML format.
+    "sd:visualPlugins":
+    - linkList:
+        tab: "Overview"
+        target: "_blank"
 
   experiment_info:
     type: File
@@ -216,23 +221,23 @@ outputs:
     doc: |
       Markdown file to explain the tracks order for IGV
     outputSource: create_metadata/output_file
-    'sd:visualPlugins':
+    "sd:visualPlugins":
     - markdownView:
-        tab: 'Overview'
+        tab: "Overview"
 
   sc_atac_coverage_stdout_log:
     type: File
     outputSource: sc_atac_coverage/stdout_log
-    label: "stdout log generated by sc_atac_coverage step"
+    label: "Output log"
     doc: |
-      stdout log generated by sc_atac_coverage step
+      Stdout log from the sc_atac_coverage step.
 
-  sc_atac_reduce_stderr_log:
+  sc_atac_coverage_stderr_log:
     type: File
     outputSource: sc_atac_coverage/stderr_log
-    label: "stderr log generated by sc_atac_coverage step"
+    label: "Error log"
     doc: |
-      stderr log generated by sc_atac_coverage step
+      Stderr log from the sc_atac_coverage step.
 
 
 steps:
@@ -251,11 +256,10 @@ steps:
       verbose:
         default: true
       parallel_memory_limit:
-        source: parallel_memory_limit
-        valueFrom: $(parseInt(self))
+        default: 32
       vector_memory_limit:
-        source: vector_memory_limit
-        valueFrom: $(parseInt(self))
+        default: 128
+      export_html_report: export_html_report
       threads:
         source: threads
         valueFrom: $(parseInt(self))
@@ -263,6 +267,7 @@ steps:
     - peaks_bigbed_file
     - cut_sites_bigwig_file
     - fragments_bigwig_file
+    - sc_report_html_file
     - stdout_log
     - stderr_log
 
@@ -291,9 +296,9 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-label: "Single-cell ATAC-Seq Genome Coverage"
-s:name: "Single-cell ATAC-Seq Genome Coverage"
-s:alternateName: "Creates genome coverage bigWig files from the provided fragments file and selected grouping parameters"
+label: "Single-Cell ATAC-Seq Genome Coverage"
+s:name: "Single-Cell ATAC-Seq Genome Coverage"
+s:alternateName: "Generates genome coverage tracks from chromatin accessibility data of selected cells"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows-datirium/master/workflows/sc-atac-coverage.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows-datirium
@@ -331,7 +336,7 @@ s:creator:
 
 
 doc: |
-  Single-cell ATAC-Seq Genome Coverage
+  Single-Cell ATAC-Seq Genome Coverage
 
-  Creates genome coverage bigWig files from the provided
-  fragments file and selected grouping parameters
+  Generates genome coverage tracks from chromatin
+  accessibility data of selected cells

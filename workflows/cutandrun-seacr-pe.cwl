@@ -14,15 +14,34 @@ requirements:
       };
   
 
-'sd:metadata':
-  - "../metadata/chipseq-header.cwl"
-
 'sd:upstream':
   genome_indices: "genome-indices.cwl"
   genome_indices_spikein: "genome-indices.cwl"
 
 
 inputs:
+
+  alias:
+    type: string
+    label: "Sample short name"
+    sd:preview:
+      position: 1
+
+  cells:
+    type: string
+    label: "Cell type/name/id"
+    sd:preview:
+      position: 2
+
+  conditions:
+    type: string
+    label: "Experimental condition(s)"
+    sd:preview:
+      position: 3
+
+  catalog:
+    type: string?
+    label: "Catalog #"
 
   indices_folder:
     type: Directory
@@ -189,14 +208,14 @@ outputs:
     'sd:visualPlugins':
     - line:
         tab: 'QC Plots'
-        Title: 'FASTQ 1 Base frequency plot'
+        Title: 'FASTQ 1 Base frequency plot (post trim)'
         xAxisTitle: 'Nucleotide position'
         yAxisTitle: 'Frequency'
         colors: ["#b3de69", "#888888", "#fb8072", "#fdc381", "#99c0db"]
         data: [$13, $14, $15, $16, $17]
     - boxplot:
         tab: 'QC Plots'
-        Title: 'FASTQ 1 Quality Control'
+        Title: 'FASTQ 1 Quality Control (post trim)'
         xAxisTitle: 'Nucleotide position'
         yAxisTitle: 'Quality score'
         colors: ["#b3de69", "#888888", "#fb8072", "#fdc381", "#99c0db"]
@@ -211,14 +230,14 @@ outputs:
     'sd:visualPlugins':
     - line:
         tab: 'QC Plots'
-        Title: 'FASTQ 2 Base frequency plot'
+        Title: 'FASTQ 2 Base frequency plot (post trim)'
         xAxisTitle: 'Nucleotide position'
         yAxisTitle: 'Frequency'
         colors: ["#b3de69", "#888888", "#fb8072", "#fdc381", "#99c0db"]
         data: [$13, $14, $15, $16, $17]
     - boxplot:
         tab: 'QC Plots'
-        Title: 'FASTQ 2 Quality Control'
+        Title: 'FASTQ 2 Quality Control (post trim)'
         xAxisTitle: 'Nucleotide position'
         yAxisTitle: 'Quality score'
         colors: ["#b3de69", "#888888", "#fb8072", "#fdc381", "#99c0db"]
@@ -429,14 +448,14 @@ outputs:
     doc: "YAML formatted combined log"
     outputSource: stats_for_vis/modified_file_yaml
 
-  stats_for_vis_log_stdout:
+  stats_for_vis_log_std_out:
     type: File
     format: "http://edamontology.org/format_2330"
     label: "stats logfile stdout"
     doc: "stdout from stats_for_vis step"
     outputSource: stats_for_vis/log_file_stdout
 
-  stats_for_vis_log_stderr:
+  stats_for_vis_log_std_err:
     type: File
     format: "http://edamontology.org/format_2330"
     label: "stats logfile stderr"
@@ -479,7 +498,7 @@ outputs:
         displayMode: "COLLAPSE"
         height: 40
 
-  annotated_peaks_file:
+  iaintersect_result:
     type: File?
     format: "http://edamontology.org/format_3475"
     label: "gene annotated peaks file"
@@ -904,6 +923,8 @@ steps:
       collected_statistics_tsv: get_stat/collected_statistics_tsv
       collected_statistics_yaml: get_stat/collected_statistics_yaml
       spikein_reads_mapped: get_spikein_bam_statistics/reads_mapped
+      peak_caller:
+        default: "SEACR"
     out: [modified_file_md, modified_file_tsv, modified_file_yaml, log_file_stdout, log_file_stderr]
 
   convert_bed_to_xls:

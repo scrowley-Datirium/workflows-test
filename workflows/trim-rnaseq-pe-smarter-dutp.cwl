@@ -46,9 +46,7 @@ inputs:
   annotation_file:
     type: File
     label: "Annotation file"
-    format:
-      - "http://edamontology.org/format_2306"
-      - "http://edamontology.org/format_3475"
+    format: "http://edamontology.org/format_3475"
     'sd:upstreamSource': "genome_indices/annotation"
     doc: "GTF or TAB-separated annotation file"
 
@@ -107,15 +105,6 @@ inputs:
 
 
 outputs:
-
-  unaligned_fastq:
-    type:
-      - "null"
-      - File[]
-    format: "http://edamontology.org/format_1930"
-    label: "Unaligned FASTQ file(s)"
-    doc: "Unaligned FASTQ file(s)"
-    outputSource: bowtie_aligner/unaligned_fastq
 
   bigwig_upstream:
     type: File
@@ -528,7 +517,7 @@ steps:
       sam:
         default: true
       threads: threads
-    out: [log_file, unaligned_fastq]
+    out: [log_file]
 
   rpkm_calculation:
     run: ../tools/geep.cwl

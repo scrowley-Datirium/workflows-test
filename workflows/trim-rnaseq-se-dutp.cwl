@@ -44,9 +44,7 @@ inputs:
   annotation_file:
     type: File
     label: "Annotation file"
-    format:
-      - "http://edamontology.org/format_2306"
-      - "http://edamontology.org/format_3475"
+    format: "http://edamontology.org/format_3475"
     'sd:upstreamSource': "genome_indices/annotation"
     doc: "GTF or TAB-separated annotation file"
 
@@ -84,6 +82,19 @@ inputs:
     label: "Clip from 5p end"
     doc: "Number of bases to clip from the 5p end"
 
+  minimum_length:
+    type: int?
+    default: 30
+    label: "Mimimum allowed read length after adapter trimming"
+    doc: |
+      Discard reads that became shorter than the
+      specified length because of either quality
+      or adapter trimming. A value of 0 effectively
+      disables this behaviour.
+      Default: 30
+    'sd:layout':
+      advanced: true
+
   minimum_rpkm:
     type: float?
     default: 1
@@ -108,6 +119,14 @@ inputs:
     'sd:layout':
       advanced: true
 
+  max_mismatch:
+    type: int?
+    default: 5
+    label: "Maximum number of mismatches the read is allowed to have"
+    doc: "Maximum number of mismatches the read is allowed to have"
+    'sd:layout':
+      advanced: true
+
 # System dependent
 
   threads:
@@ -119,15 +138,6 @@ inputs:
     doc: "Number of threads for those steps that support multithreading"
 
 outputs:
-
-  unaligned_fastq:
-    type:
-      - "null"
-      - File[]
-    format: "http://edamontology.org/format_1930"
-    label: "Unaligned FASTQ file(s)"
-    doc: "Unaligned FASTQ file(s)"
-    outputSource: bowtie_aligner/unaligned_fastq
 
   bigwig_upstream:
     type: File
@@ -191,6 +201,12 @@ outputs:
     label: "STAR sj log"
     doc: "STAR SJ.out.tab"
     outputSource: star_aligner/log_sj
+
+  unmapped_fastq:
+    type: File
+    label: "Unmapped reads from FASTQ input file(s)"
+    doc: "Unmapped reads from FASTQ input file(s)"
+    outputSource: compress_unmapped_mate_1_file/output_file
 
   fastx_statistics:
     type: File
@@ -374,8 +390,7 @@ steps:
       input_file: extract_fastq/fastq_file
       dont_gzip:
         default: true
-      length:
-        default: 30
+      length: minimum_length
     out:
       - trimmed_file
       - report_file
@@ -409,23 +424,32 @@ steps:
       genomeDir: star_indices_folder
       outFilterMultimapNmax: max_multimap
       winAnchorMultimapNmax: max_multimap_anchor
-      outFilterMismatchNmax:
-        default: 5
+      outFilterMismatchNmax: max_mismatch
       alignSJDBoverhangMin:
         default: 1
       seedSearchStartLmax:
         default: 15
       clip3pNbases: clip_3p_end
       clip5pNbases: clip_5p_end
+      outReadsUnmapped:
+        default: "Fastx"
       threads: threads
     out:
       - aligned_file
+      - unmapped_mate_1_file
       - log_final
       - uniquely_mapped_reads_number
       - log_out
       - log_progress
       - log_std
       - log_sj
+
+  compress_unmapped_mate_1_file:
+    run: ../tools/bzip2-compress.cwl
+    in:
+      input_file: star_aligner/unmapped_mate_1_file
+    out:
+    - output_file
 
   fastx_quality_stats:
     run: ../tools/fastx-quality-stats.cwl
@@ -501,7 +525,7 @@ steps:
       sam:
         default: true
       threads: threads
-    out: [log_file, unaligned_fastq]
+    out: [log_file]
 
   rpkm_calculation:
     run: ../tools/geep.cwl

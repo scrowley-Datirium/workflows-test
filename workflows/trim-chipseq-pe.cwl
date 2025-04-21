@@ -53,9 +53,9 @@ inputs:
     default: null
     'sd:upstreamSource': "control_file/bambai_pair"
     'sd:localLabel': true
-    label: "Use experiment as a control"
+    label: "Use sample as a control (optional)"
     format: "http://edamontology.org/format_2572"
-    doc: "Use experiment as a control for MACS2 peak calling"
+    doc: "If skipping upstream (i.e. not using an upstream sample as input here), please upload a BAM format file."
 
   broad_peak:
     type: boolean?
@@ -112,6 +112,19 @@ inputs:
       advanced: true
     label: "Clip from 5p end"
     doc: "Number of bases to clip from the 5p end"
+
+  minimum_length:
+    type: int?
+    default: 30
+    label: "Mimimum allowed read length after adapter trimming"
+    doc: |
+      Discard reads that became shorter than the
+      specified length because of either quality
+      or adapter trimming. A value of 0 effectively
+      disables this behaviour.
+      Default: 30
+    'sd:layout':
+      advanced: true
 
   remove_duplicates:
     type: boolean?
@@ -258,7 +271,7 @@ outputs:
         tab: 'Peak Calling'
         Title: 'Islands list'
 
-  atdp_log:
+  atdp_log_file:
     type: File
     label: "ATDP log"
     format: "http://edamontology.org/format_3475"
@@ -524,8 +537,7 @@ steps:
       input_file_pair: extract_fastq_downstream/fastq_file
       dont_gzip:
         default: true
-      length:
-        default: 30
+      length: minimum_length
       trim1:
         default: true
       paired:

@@ -2,15 +2,18 @@ cwlVersion: v1.0
 class: CommandLineTool
 
 requirements:
-- class: InlineJavascriptRequirement
-- class: EnvVarRequirement
-  envDef:
-    http_proxy: $(inputs.http_proxy?inputs.http_proxy:"")
-    https_proxy: $(inputs.https_proxy?inputs.https_proxy:"")
+  - class: InlineJavascriptRequirement
+  - class: EnvVarRequirement
+    envDef:
+      http_proxy: $(inputs.http_proxy?inputs.http_proxy:"")
+      https_proxy: $(inputs.https_proxy?inputs.https_proxy:"")
+  - class: ResourceRequirement
+    ramMin: 7024                    # equal to ~8GB
+    coresMin: 1
 
 hints:
 - class: DockerRequirement
-  dockerPull: biowardrobe2/fastqdwnld:v0.0.2
+  dockerPull: biowardrobe2/fastqdwnld:v0.0.5
 
 
 inputs:
@@ -168,10 +171,10 @@ outputs:
           return (!!splitted_line.length)?splitted_line:null;
         }
 
-  stdout_log:
+  log_stdout:
     type: stdout
 
-  stderr_log:
+  log_stderr:
     type: stderr
 
 
@@ -187,9 +190,9 @@ $namespaces:
 $schemas:
 - https://github.com/schemaorg/schemaorg/raw/main/data/releases/11.01/schemaorg-current-http.rdf
 
-label: "Fastq-Dump on Steroids"
-s:name: "Fastq-Dump on Steroids"
-s:alternateName: "Downloads FASTQ files from the provided SRR identifier"
+label: "FASTQ Download"
+s:name: "FASTQ Download"
+s:alternateName: "Assists in downloading problematic single-cell sequencing data from Sequence Read Archive (SRA)"
 
 s:downloadUrl: https://raw.githubusercontent.com/Barski-lab/workflows/master/tools/fastq-dump.cwl
 s:codeRepository: https://github.com/Barski-lab/workflows
@@ -227,9 +230,10 @@ s:creator:
 
 
 doc: |
-  Fastq-Dump on Steroids
+  FASTQ Download
 
-  Downloads FASTQ files from the provided SRR identifier
+  Assists in downloading problematic single-cell sequencing
+  data from Sequence Read Archive (SRA)
 
 
 s:about: |
